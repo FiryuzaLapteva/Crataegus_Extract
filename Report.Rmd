@@ -951,16 +951,16 @@ ggplot(bnp_sum, aes(x = VISIT, y = mean, group = arm, colour = arm)) +
 
 Динамика уровня NT-proBNP в группах лечения
 
-ANCOVA анализ безопасности
+## ANCOVA анализ безопасности
 
-```{r ancova_v6}
+```{r}
 
 # ====== ANCOVA для Креатинина V6 ======
 df_ancova_creat_v6 <- team1 %>%
   select(USUBJID, ARM, V1_BIO_CREAT, V6_BIO_CREAT) %>%
   filter(!is.na(V1_BIO_CREAT) & !is.na(V6_BIO_CREAT))
-cat("Sample size - Creatinine V6:\n")
-print(table(df_ancova_creat_v6$ARM))
+# cat("Sample size - Creatinine V6:\n")
+# print(table(df_ancova_creat_v6$ARM))
 ancova_model_creat_v6 <- lm(
   V6_BIO_CREAT ~ V1_BIO_CREAT + ARM,
   data = df_ancova_creat_v6
@@ -975,8 +975,8 @@ ci_upper <- coef_arm + 1.96 * se_arm
 df_ancova_egfr_v6 <- team1 %>%
   select(USUBJID, ARM, V1_BIO_EGFR, V6_BIO_EGFR) %>%
   filter(!is.na(V1_BIO_EGFR) & !is.na(V6_BIO_EGFR))
-cat("\nSample size - eGFR V6:\n")
-print(table(df_ancova_egfr_v6$ARM))
+# cat("\nSample size - eGFR V6:\n")
+# print(table(df_ancova_egfr_v6$ARM))
 ancova_model_egfr_v6 <- lm(
   V6_BIO_EGFR ~ V1_BIO_EGFR + ARM,
   data = df_ancova_egfr_v6
@@ -991,8 +991,8 @@ ci_upper_egfr <- coef_arm_egfr + 1.96 * se_arm_egfr
 df_ancova_K_v6 <- team1 %>%
   select(USUBJID, ARM, V1_BIO_K, V6_BIO_K) %>%
   filter(!is.na(V1_BIO_K) & !is.na(V6_BIO_K))
-cat("Sample size - POTASSIUM V6:\n")
-print(table(df_ancova_K_v6$ARM))
+# cat("Sample size - POTASSIUM V6:\n")
+# print(table(df_ancova_K_v6$ARM))
 ancova_model_K_v6 <- lm(
   V6_BIO_K ~ V1_BIO_K + ARM,
   data = df_ancova_K_v6
@@ -1007,8 +1007,8 @@ ci_upper_K <- coef_arm + 1.96 * se_arm
 df_ancova_creat_v8 <- team1 %>%
   select(USUBJID, ARM, V1_BIO_CREAT, V8_BIO_CREAT) %>%
   filter(!is.na(V1_BIO_CREAT) & !is.na(V8_BIO_CREAT))
-cat("\nSample size - Creatinine V8:\n")
-print(table(df_ancova_creat_v8$ARM))
+# cat("\nSample size - Creatinine V8:\n")
+# print(table(df_ancova_creat_v8$ARM))
 ancova_model_creat_v8 <- lm(
   V8_BIO_CREAT ~ V1_BIO_CREAT + ARM,
   data = df_ancova_creat_v8
@@ -1023,8 +1023,8 @@ ci_upper_v8 <- coef_arm_v8 + 1.96 * se_arm_v8
 df_ancova_egfr_v8 <- team1 %>%
   select(USUBJID, ARM, V1_BIO_EGFR, V8_BIO_EGFR) %>%
   filter(!is.na(V1_BIO_EGFR) & !is.na(V8_BIO_EGFR))
-cat("\nSample size - eGFR V8:\n")
-print(table(df_ancova_egfr_v8$ARM))
+# cat("\nSample size - eGFR V8:\n")
+# print(table(df_ancova_egfr_v8$ARM))
 ancova_model_egfr_v8 <- lm(
   V8_BIO_EGFR ~ V1_BIO_EGFR + ARM,
   data = df_ancova_egfr_v8
@@ -1039,8 +1039,8 @@ ci_upper_egfr_v8 <- coef_arm_egfr_v8 + 1.96 * se_arm_egfr_v8
 df_ancova_K_v8 <- team1 %>%
   select(USUBJID, ARM, V1_BIO_K, V8_BIO_K) %>%
   filter(!is.na(V1_BIO_K) & !is.na(V8_BIO_K))
-cat("\nSample size - POTASSIUM V8:\n")
-print(table(df_ancova_K_v8$ARM))
+# cat("\nSample size - POTASSIUM V8:\n")
+# print(table(df_ancova_K_v8$ARM))
 ancova_model_K_v8 <- lm(
   V8_BIO_K ~ V1_BIO_K + ARM,
   data = df_ancova_K_v8
@@ -1055,7 +1055,7 @@ ci_upper_K_v8 <- coef_arm_v8 + 1.96 * se_arm_v8
 
 ### Сводная таблица ANCOVA результатов безопасности
 
-```{r summary_ancova_table}
+```{r}
 summary_results <- data.frame(
   Parameter = c("Creatinine", "Creatinine", "eGFR", "eGFR","Potassium","Potassium" ),
   Visit = c("V6", "V8", "V6", "V8","V6", "V8"),
@@ -1112,6 +1112,9 @@ ancova_summary_table
 
 ANCOVA анализ показал отсутствие статистически значимых различий между группами Crataegus и Placebo по показателям функции почек (креатинин и eGFR) и уровню электролитов (калий) на всех визитах. Креатинин существенно не отличался (12 месяцев: p=0.437; 24 месяца: p=0.099), eGFR показал аналогичный результат (12 месяцев: p=0.119; 24 месяца: p=0.311). Уровень калия был идентичен между группами (12 месяцев: p=0.970; 24 месяца: p=0.323). Таким образом, препарат Crataegus продемонстрировал профиль безопасности, сопоставимый с плацебо, без явных признаков нефротоксичности или электролитного дисбаланса.
 
-## Заключение
+# Заключение
 
-Статистический анализ не продемонстрировал превосходства экстракта боярышника (Crataegus) над плацебо по первичной конечной точке — риску развития первого события комбинированной конечной точки, оценённому с использованием модели пропорциональных рисков Кокса. Анализ вторичных конечных точек, включая госпитализации по поводу декомпенсации хронической сердечной недостаточности и сердечно-сосудистую смертность, выполненный с применением методов анализа выживаемости (кривые Каплана–Мейера и лог-ранговый критерий), также не выявил статистически значимых различий между группами лечения. Изменения показателей качества жизни по шкале KCCQ и уровня NT-proBNP, оценённые отдельно на 12-м и 24-м месяцах с использованием моделей ANCOVA с поправкой на исходные значения, не продемонстрировали статистически значимого эффекта лечения. Анализ безопасности не выявил клинически значимых межгрупповых различий по показателям функции почек и электролитного баланса. В совокупности полученные данные не подтверждают наличие статистически значимого эффекта лечения экстрактом боярышника по сравнению с плацебо в исследуемой популяции.
+Проведенный анализ не продемонстрировал статистически значимого превосходства экстракта боярышника (Crataegus) по сравнению с плацебо в популяции пациентов с хронической сердечной недостаточностью со сниженной фракцией выброса левого желудочка, получавших оптимальную медикаментозную терапию, в отношении снижения риска наступления комбинированной первичной конечной точки, включающей сердечно-сосудистую смерть или повторную госпитализацию по поводу декомпенсации сердечной недостаточности. Анализ вторичных конечных точек, включая компоненты первичной конечной точки: госпитализации по поводу декомпенсации хронической сердечной недостаточности и сердечно-сосудистую смертность, выполненный с использованием методов анализа выживаемости, не выявил статистически значимых различий между группами лечения.
+Изменения показателей качества жизни по шкале Kansas City Cardiomyopathy Questionnaire (KCCQ) и уровня NT-proBNP, оценённые отдельно на 12-м и 24-м месяцах наблюдения, также не продемонстрировали статистически значимых межгрупповых различий.
+Анализ безопасности, включавший оценку показателей функции почек и электролитного баланса на протяжении периода наблюдения, не выявил клинически значимых различий между группами экстракта боярышника и плацебо.
+В совокупности результаты исследования не подтверждают наличие статистически значимого эффекта лечения экстрактом боярышника по сравнению с плацебо в исследуемой популяции пациентов с хронической сердечной недостаточностью со сниженной фракцией выброса левого желудочка.
