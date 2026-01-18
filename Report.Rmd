@@ -22,12 +22,25 @@ knitr::opts_chunk$set(echo = TRUE)
 library(flextable)
 library(tidyverse)
 library(summarytools)
+library(survminer)      # для выживаемости
+library(survival) 
+library(survRM2)        # для RMST
+library(gt)             # форматирование таблиц
 ```
 
 ```{r}
 team1 <- read.csv("data/team1_ecrf_wide.csv", sep = ",")
+data_surv <- team1 |> 
+  select(
+    id     = USUBJID,
+    group  = ARM,
+    Time   = V0_END_TTE_COMP_M,
+    Event_OS = V0_END_COMP_EVENT,
+    type   = V0_END_COMP_TYPE
+  )
 ```
 
+# Общая таблица
 ```{r warning=FALSE}
 variability <- team1|>
   dfSummary(graph.col = TRUE,
@@ -37,7 +50,71 @@ print(variability, method = "render")
 
 ```
 
+# Общая Выживаемость
 
+Первичный анализ эффективности будет проведен путем построения кривых выживаемости по методу Каплана-Мейера.
+
+Статистическая значимость различий между группами будет оценена с помощью лог-рангового критерия
+
+```{r}
+surv_object <- Surv(time = data_surv$Time, event = data_surv$Event_OS)
+
+fit_2 <- survfit(surv_object ~ group, data = data_surv)
+
+q2 <- quantile(fit_2, probs = c(0.25, 0.5, 0.75),
+               conf.int = TRUE)
+as.data.frame(q2)
+```
+
+
+```{r fig.height=8, fig.width=10}
+p2 <- ggsurvplot(fit_2, 
+                 data = data_surv,
+                 conf.int = TRUE,
+                 surv.median.line = "hv",
+                 xlab="Month",
+                 risk.table = TRUE,
+                 tables.height = 0.25,
+                 pval = TRUE,
+                 pval.coord = c(22, 0.7),
+                 break.time.by = 2,
+                 xlim = c(0, 24))
+p2
+```
+# Выживаемость по типу первого композитного ключа
+```{r  fig.height=8, fig.width=10}
+event_types <- c("HF_HOSP", "CV_DEATH")
+
+# Мапим по списку событий
+plots_list <- map(event_types, function(current_event) {
+  
+  # ШАГ 1: Создаем временный датасет внутри функции.
+  # Мы создаем колонку 'is_event', которая будет TRUE (1) для текущего типа события.
+  temp_data <- data_surv %>%
+    mutate(is_event = (type == current_event))
+  
+  # ШАГ 2: Теперь survfit четко видит колонку 'is_event' внутри 'temp_data'
+  fit <- survfit(Surv(Time, is_event) ~ group, data = temp_data)
+  
+  # ШАГ 3: Рисуем
+  ggsurvplot(fit, 
+             data = temp_data,
+             conf.int = TRUE,
+             risk.table = TRUE,
+             pval = TRUE,
+             legend.labs = c("Crataegus", "Placebo"), 
+             legend.title = "Group",
+             title = paste("Outcome:", current_event), # Используем current_event
+             xlab = "Months",
+             xlim = c(0, 24),
+             break.time.by = 2,
+             palette = "Dark2")
+})
+
+# Вывод
+plots_list[[1]] # График для HF_HOSP
+plots_list[[2]] # График для CV_DEATH
+```
 
 
 
