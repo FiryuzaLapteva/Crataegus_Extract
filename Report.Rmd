@@ -930,145 +930,18 @@ ggplot(bnp_sum, aes(x = VISIT, y = mean, group = arm, colour = arm)) +
 
 
 
-# 6. АНАЛИЗ БЕЗОПАСНОСТИ: КОЛИЧЕСТВЕННЫЕ ПЕРЕМЕННЫЕ
+# АНАЛИЗ БЕЗОПАСНОСТИ
 
-## 6.1 Проверка предварительных условий
 
-### Тест нормальности (Shapiro-Wilk)
-
-```{r shapiro_test, echo=TRUE}
-cat("=== ПРОВЕРКА НОРМАЛЬНОСТИ РАСПРЕДЕЛЕНИЯ ===\n")
-cat("H0: данные нормально распределены (p > 0.05 ✓)\n\n")
-
-variables_to_check <- c(
-  "V1_BIO_CREAT", "V6_BIO_CREAT", "V8_BIO_CREAT",
-  "V1_BIO_EGFR", "V6_BIO_EGFR", "V8_BIO_EGFR",
-  "V1_BIO_K", "V6_BIO_K","V8_BIO_K"
-)
-
-shapiro_results <- data.frame()
-
-for (var in variables_to_check) {
-  if (var %in% names(team1)) {
-    data_clean <- team1[[var]][!is.na(team1[[var]])]
-    if (length(data_clean) > 0) {
-      shapiro_test <- shapiro.test(data_clean)
-      shapiro_results <- bind_rows(shapiro_results, 
-        data.frame(
-          Variable = var,
-          N = length(data_clean),
-          Statistic = round(shapiro_test$statistic, 4),
-          P_value = round(shapiro_test$p.value, 4),
-          Normal = ifelse(shapiro_test$p.value > 0.05, "YES ✓", "NO ✗")
-        )
-      )
-    }
-  }
-}
-
-shapiro_table <- shapiro_results %>%
-  flextable() %>%
-  theme_booktabs() %>%
-  autofit() %>%
-  set_table_properties(layout = "autofit", width = 1) %>%
-  set_caption("Результаты тестов нормальности (Shapiro-Wilk)")
-
-shapiro_table
-```
-
-### Тест гомогенности дисперсий (Levene's test)
-
-```{r levene_test, echo=TRUE}
-cat("\n=== ПРОВЕРКА ГОМОГЕННОСТИ ДИСПЕРСИЙ ===\n")
-cat("H0: дисперсии равны в группах (p > 0.05 ✓)\n\n")
-
-levene_results <- data.frame()
-
-for (var in c("V1_BIO_CREAT", "V6_BIO_CREAT", "V8_BIO_CREAT",
-              "V1_BIO_EGFR", "V6_BIO_EGFR", "V8_BIO_EGFR",
-              "V1_BIO_K", "V6_BIO_K","V8_BIO_K")) {
-  if (var %in% names(team1)) {
-    df_clean <- team1 %>% select(ARM, !!var) %>% filter(!is.na(.data[[var]]))
-    if (nrow(df_clean) > 0) {
-      levene_test <- car::leveneTest(df_clean[[var]], df_clean$ARM)
-      levene_results <- bind_rows(levene_results,
-        data.frame(
-          Variable = var,
-          Statistic = round(levene_test$`F value`[1], 4),
-          P_value = round(levene_test$`Pr(>F)`[1], 4),
-          Equal_Variances = ifelse(levene_test$`Pr(>F)`[1] > 0.05, "YES ✓", "NO ✗")
-        )
-      )
-    }
-  }
-}
-
-levene_table <- levene_results %>%
-  flextable() %>%
-  theme_booktabs() %>%
-  autofit() %>%
-  set_table_properties(layout = "autofit", width = 1) %>%
-  set_caption("Тесты гомогенности дисперсий (Levene's test)")
-
-levene_table
-```
-
----
-
-## 6.2 Описательная статистика - Baseline (V1)
-
-```{r descriptive_v1, echo=TRUE}
-desc_v1 <- team1 %>%
-  select(ARM, V1_BIO_CREAT, V1_BIO_EGFR, V1_BIO_K) %>%
-  filter(!is.na(V1_BIO_CREAT) | !is.na(V1_BIO_EGFR) | !is.na(V1_BIO_EGFR)) %>%
-  pivot_longer(
-    cols = -ARM,
-    names_to = "Parameter",
-    values_to = "Value"
-  ) %>%
-  filter(!is.na(Value)) %>%
-  group_by(ARM, Parameter) %>%
-  summarise(
-    N = n(),
-    Mean = round(mean(Value), 2),
-    SD = round(sd(Value), 2),
-    Median = round(median(Value), 2),
-    Min = round(min(Value), 2),
-    Max = round(max(Value), 2),
-    .groups = 'drop'
-  ) %>%
-  mutate(
-    Parameter = recode(Parameter,
-                       V1_BIO_CREAT = "Creatinine (mg/dL)",
-                       V1_BIO_EGFR = "eGFR (mL/min)",
-                       V1_BIO_K = "POTASSIUM (mmol/L)"
-                       )
-  )
-
-desc_v1_table <- desc_v1 %>%
-  flextable() %>%
-  theme_booktabs() %>%
-  autofit() %>%
-  set_table_properties(layout = "autofit", width = 1) %>%
-  set_caption("Описательная статистика - Baseline (V1)")
-
-desc_v1_table
-```
-
----
-
-## 6.3 ANCOVA анализ: V6 скорректировано на V1
+В связи с отсутствием в базе данных информации по нежелательным явлениям анализ безопасности был проведен по количественным переменным -  уровню креатинина,  уровню калия в анализах крови и скорости клубочковой фильтрации
 
 ```{r ancova_v6, echo=TRUE}
-cat("\n=== ANCOVA: V6 СКОРРЕКТИРОВАНО НА V1 ===\n\n")
 
-# ====== ANCOVA для Креатинина V6 ======
+
 df_ancova_creat_v6 <- team1 %>%
   select(USUBJID, ARM, V1_BIO_CREAT, V6_BIO_CREAT) %>%
   filter(!is.na(V1_BIO_CREAT) & !is.na(V6_BIO_CREAT))
 
-cat("Sample size - Creatinine V6:\n")
-print(table(df_ancova_creat_v6$ARM))
 
 ancova_model_creat_v6 <- lm(
   V6_BIO_CREAT ~ V1_BIO_CREAT + ARM,
@@ -1082,13 +955,10 @@ p_val <- summary(ancova_model_creat_v6)$coefficients["ARMPlacebo", "Pr(>|t|)"]
 ci_lower <- coef_arm - 1.96 * se_arm
 ci_upper <- coef_arm + 1.96 * se_arm
 
-# ====== ANCOVA для eGFR V6 ======
 df_ancova_egfr_v6 <- team1 %>%
   select(USUBJID, ARM, V1_BIO_EGFR, V6_BIO_EGFR) %>%
   filter(!is.na(V1_BIO_EGFR) & !is.na(V6_BIO_EGFR))
 
-cat("\nSample size - eGFR V6:\n")
-print(table(df_ancova_egfr_v6$ARM))
 
 ancova_model_egfr_v6 <- lm(
   V6_BIO_EGFR ~ V1_BIO_EGFR + ARM,
@@ -1102,14 +972,11 @@ p_val_egfr <- summary(ancova_model_egfr_v6)$coefficients["ARMPlacebo", "Pr(>|t|)
 ci_lower_egfr <- coef_arm_egfr - 1.96 * se_arm_egfr
 ci_upper_egfr <- coef_arm_egfr + 1.96 * se_arm_egfr
 
-# ====== ANCOVA для КАЛИЯ V6 ======
+
 
 df_ancova_K_v6 <- team1 %>%
   select(USUBJID, ARM, V1_BIO_K, V6_BIO_K) %>%
   filter(!is.na(V1_BIO_K) & !is.na(V6_BIO_K))
-
-cat("Sample size - POTASSIUM V6:\n")
-print(table(df_ancova_K_v6$ARM))
 
 ancova_model_K_v6 <- lm(
   V6_BIO_K ~ V1_BIO_K + ARM,
@@ -1124,13 +991,9 @@ ci_lower_K <- coef_arm - 1.96 * se_arm
 ci_upper_K <- coef_arm + 1.96 * se_arm
 
 
-# ====== ANCOVA для Креатинина V8 ======
 df_ancova_creat_v8 <- team1 %>%
   select(USUBJID, ARM, V1_BIO_CREAT, V8_BIO_CREAT) %>%
   filter(!is.na(V1_BIO_CREAT) & !is.na(V8_BIO_CREAT))
-
-cat("\nSample size - Creatinine V8:\n")
-print(table(df_ancova_creat_v8$ARM))
 
 ancova_model_creat_v8 <- lm(
   V8_BIO_CREAT ~ V1_BIO_CREAT + ARM,
@@ -1144,13 +1007,11 @@ p_val_v8 <- summary(ancova_model_creat_v8)$coefficients["ARMPlacebo", "Pr(>|t|)"
 ci_lower_v8 <- coef_arm_v8 - 1.96 * se_arm_v8
 ci_upper_v8 <- coef_arm_v8 + 1.96 * se_arm_v8
 
-# ====== ANCOVA для eGFR V8 ======
 df_ancova_egfr_v8 <- team1 %>%
   select(USUBJID, ARM, V1_BIO_EGFR, V8_BIO_EGFR) %>%
   filter(!is.na(V1_BIO_EGFR) & !is.na(V8_BIO_EGFR))
 
-cat("\nSample size - eGFR V8:\n")
-print(table(df_ancova_egfr_v8$ARM))
+
 
 ancova_model_egfr_v8 <- lm(
   V8_BIO_EGFR ~ V1_BIO_EGFR + ARM,
@@ -1164,13 +1025,9 @@ p_val_egfr_v8 <- summary(ancova_model_egfr_v8)$coefficients["ARMPlacebo", "Pr(>|
 ci_lower_egfr_v8 <- coef_arm_egfr_v8 - 1.96 * se_arm_egfr_v8
 ci_upper_egfr_v8 <- coef_arm_egfr_v8 + 1.96 * se_arm_egfr_v8
 
-# ====== ANCOVA для КАЛИЯ V8 ======
 df_ancova_K_v8 <- team1 %>%
   select(USUBJID, ARM, V1_BIO_K, V8_BIO_K) %>%
   filter(!is.na(V1_BIO_K) & !is.na(V8_BIO_K))
-
-cat("\nSample size - POTASSIUM V8:\n")
-print(table(df_ancova_K_v8$ARM))
 
 ancova_model_K_v8 <- lm(
   V8_BIO_K ~ V1_BIO_K + ARM,
@@ -1183,11 +1040,10 @@ t_stat_K_v8 <- summary(ancova_model_K_v8)$coefficients["ARMPlacebo", "t value"]
 p_val_K_v8 <- summary(ancova_model_K_v8)$coefficients["ARMPlacebo", "Pr(>|t|)"]
 ci_lower_K_v8 <- coef_arm_v8 - 1.96 * se_arm_v8
 ci_upper_K_v8 <- coef_arm_v8 + 1.96 * se_arm_v8
-```
+
 
 ### Сводная таблица ANCOVA результатов
 
-```{r summary_ancova_table, echo=TRUE}
 summary_results <- data.frame(
   Parameter = c("Creatinine", "Creatinine", "eGFR", "eGFR","Potassium","Potassium" ),
   Visit = c("V6", "V8", "V6", "V8","V6", "V8"),
@@ -1253,7 +1109,7 @@ ancova_summary_table
 ```
 
 
-ANCOVA анализ показал отсутствие статистически значимых различий между группами Crataegus и Placebo по показателям функции почек (креатинин и eGFR) и уровню электролитов (калий) на всех визитах. Креатинин существенно не отличался (V6: p=0.437; V8: p=0.099), eGFR показал аналогичный результат (V6: p=0.119; V8: p=0.311). Уровень калия был идентичен между группами (V6: p=0.970; V8: p=0.323). Таким образом, препарат Crataegus продемонстрировал профиль безопасности, сопоставимый с плацебо, без явных признаков нефротоксичности или электролитного дисбаланса.
+ANCOVA анализ показал отсутствие статистически значимых различий между группами Crataegus и Placebo по показателям функции почек (креатинин и eGFR) и уровню электролитов (калий) на всех визитах. Креатинин существенно не отличался (12 мес: p=0.437; 24 мес: p=0.099), eGFR показал аналогичный результат (12 мес: p=0.119; 24 мес: p=0.311). Уровень калия был идентичен между группами (12 мес: p=0.970; 24 мес: p=0.323). Таким образом, препарат Crataegus продемонстрировал профиль безопасности, сопоставимый с плацебо, без явных признаков нефротоксичности или электролитного дисбаланса.
 ---
 
 
