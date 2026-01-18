@@ -53,7 +53,7 @@ data_surv <- team1 |>
 
 # Проверка данных
 
-По доступным данным визита V1 формальные отклонения от критериев включения/невключения были выявлены у 417 пациентов (19.0%). Основной вклад (398 пациентов, 94.5%) был обусловлен значениями NT-proBNP ниже условно принятого порога ≥600 пг/мл. Следует отметить, что в базе отсутствовали данные о наличии фибрилляции предсердий и недавних госпитализаций по поводу ХСН, что не позволило применить дифференцированные пороги NT-proBNP, предусмотренные протоколом. Кроме того, у 23 пациентов (1.0%) отмечалось снижение eGFR <30 мл/мин/1,73 м². Несмотря на то что снижение eGFR <30 мл/мин/1,73 м² являлось формальным критерием невключения, данные пациенты не были исключены из основного анализа, который выполнялся по принципу intention-to-treat. Выявленные несоответствия по NT-proBNP следует рассматривать как потенциальные и обусловленные ограничениями доступных данных.
+По доступным данным визита V1 формальные отклонения от критериев включения/невключения были выявлены у 417 пациентов (19.0%). Основной вклад (398 пациентов, 94.5%) был обусловлен значениями NT-proBNP ниже условно принятого порога ≥600 пг/мл. Следует отметить, что в базе отсутствовали данные о наличии фибрилляции предсердий и недавних госпитализаций по поводу ХСН, что не позволило применить дифференцированные пороги NT-proBNP, предусмотренные протоколом. Кроме того, у 23 пациентов (1.0%) отмечалось снижение eGFR \<30 мл/мин/1,73 м². Несмотря на то что снижение eGFR \<30 мл/мин/1,73 м² являлось формальным критерием невключения, данные пациенты не были исключены из основного анализа, который выполнялся по принципу intention-to-treat. Выявленные несоответствия по NT-proBNP следует рассматривать как потенциальные и обусловленные ограничениями доступных данных.
 
 ```{r}
 
@@ -103,7 +103,6 @@ screening %>%
 
 Исходные демографические и клинические характеристики пациентов в группах Crataegus и Placebo хорошо сбалансированы, клинически значимых различий между группами на исходном уровне не выявлено.
 
-
 ```{r tbl-demographics, echo=FALSE, tab.cap="Клинико-демографические характеристики групп"}
 df <- team1
 
@@ -145,10 +144,9 @@ tbl_by_arm <- df %>%
 tbl_by_arm
 ```
 
-
 # Анализ ПКТ
 
-Для оценка первичной конечной точки  будет проведен анализ с использованием модели пропорциональных рисков Кокса (Cox Proportional Hazards Model).
+Для оценка первичной конечной точки будет проведен анализ с использованием модели пропорциональных рисков Кокса (Cox Proportional Hazards Model).
 
 Для подтверждения корректности использования модели Кокса была проведена проверка допущения о пропорциональности рисков (тест на основе остатков Шонфилда). Результаты теста (p=0.28 для группы терапии и p=0.28 для модели в целом) подтверждают соблюдение допущения о пропорциональности рисков. Это позволяет считать полученную оценку Hazard Ratio (HR) корректной и стабильной на всем интервале наблюдения (24 месяца).
 
@@ -223,9 +221,11 @@ p2 <- ggsurvplot(fit_2,
                  xlim = c(0, 24))
 p2
 ```
-Значение p=1(крайне редкое для реальных данных) указывает на абсолютную идентичность кривых накопления событий госпитализации в обеих группах. Это означает, что вероятность попасть в больницу с декомпенсацией СН была абсолютно одинаковой как для пациентов, принимавших Crataegus, так и для группы контроля. 
 
-В отношении наиболее «жесткой» точки — смертности — наблюдается минимальное, статистически незначимое расхождение кривых. 
+Значение p=1(крайне редкое для реальных данных) указывает на абсолютную идентичность кривых накопления событий госпитализации в обеих группах. Это означает, что вероятность попасть в больницу с декомпенсацией СН была абсолютно одинаковой как для пациентов, принимавших Crataegus, так и для группы контроля.
+
+В отношении наиболее «жесткой» точки — смертности — наблюдается минимальное, статистически незначимое расхождение кривых.
+
 ```{r  fig.height=8, fig.width=10}
 event_types <- c("HF_HOSP", "CV_DEATH")
 
@@ -254,8 +254,6 @@ plots_list <- map(event_types, function(current_event) {
 plots_list[[1]] # График для HF_HOSP
 plots_list[[2]] # График для CV_DEATH
 ```
-
-
 
 ```{r}
 team1 <- team1 %>%
@@ -299,10 +297,9 @@ outcomes_table <- tbl_events %>%
 outcomes_table
 ```
 
-Анализ динамики качества жизни по шкале KCCQ 
+Анализ динамики качества жизни по шкале KCCQ
 
-Исходные значения суммарного балла Kansas City Cardiomyopathy Questionnaire (KCCQ) были сопоставимы между группами лечения. Для анализов через 12 и 24 месяца использовались данные пациентов с доступной оценкой KCCQ на соответствующем визите. Статистически значимых различий между группами лечения выявлено не было. Через 12 месяцев наблюдения скорректированная межгрупповая разница суммарного балла KCCQ (боярышник минус плацебо) составила 0,3 балла (95% ДИ от −1,0 до 1,5; p = 0,678). Через 24 месяца наблюдения соответствующая скорректированная межгрупповая разница составила 0,9 балла (95% ДИ от −0,6 до 2,4; p = 0,234). 
-
+Исходные значения суммарного балла Kansas City Cardiomyopathy Questionnaire (KCCQ) были сопоставимы между группами лечения. Для анализов через 12 и 24 месяца использовались данные пациентов с доступной оценкой KCCQ на соответствующем визите. Статистически значимых различий между группами лечения выявлено не было. Через 12 месяцев наблюдения скорректированная межгрупповая разница суммарного балла KCCQ (боярышник минус плацебо) составила 0,3 балла (95% ДИ от −1,0 до 1,5; p = 0,678). Через 24 месяца наблюдения соответствующая скорректированная межгрупповая разница составила 0,9 балла (95% ДИ от −0,6 до 2,4; p = 0,234).
 
 ```{r}
 # 1) Подготовка данных KCCQ для ANCOVA
@@ -315,7 +312,6 @@ dat_kccq <- team1 %>%
     KCCQ_24 = ifelse(death_before_24m, NA, V8_KCCQ_OS)
   )
 ```
-
 
 ```{r ancova, include = FALSE}
 fit12 <- lm(KCCQ_12 ~ ARM + KCCQ_BL, data = dat_kccq)
@@ -374,7 +370,6 @@ kccq_results_table <- kccq_results %>%
   add_footer_lines("Разница рассчитана для группы Боярышник относительно группы Плацебо.")
 
 ```
-
 
 ```{r}
 # helpers 
@@ -502,7 +497,8 @@ tbl_kccq <- tbl_df %>%
 
 tbl_kccq
 ```
-Таблица Х Динамика качества жизни по шкале KCCQ
+
+Таблица 1. Динамика качества жизни по шкале KCCQ
 
 Дополнительно динамика качества жизни по KCCQ в зависимости от группы лечения в различных сроках наблюдения отражены на рисунке Х.
 
@@ -529,7 +525,6 @@ kccq_sum <- team1 %>%
     .groups = "drop"
   )
 ```
-
 
 ```{r}
 
@@ -558,11 +553,9 @@ ggplot(kccq_sum,
   theme_minimal(base_size = 12)
 ```
 
-Рисунок X. Динамика качества жизни по шкале KCCQ в группах лечения
+Рисунок 1. Динамика качества жизни по шкале KCCQ в группах лечения
 
-
-Как уже отмечалось, клинически значимое улучшение определено как увеличение суммарного балла KCCQ ≥ 5 пунктов по сравнению с исходным уровнем. В анализ включены пациенты с доступной оценкой KCCQ на соответствующем визите. Через 12 месяцев клинически значимое улучшение качества жизни (ΔKCCQ ≥ 5 баллов) было отмечено у 431 пациента (46,3%) в группе плацебо и у 448 пациентов (48,2%) в группе боярышника; статистически значимых различий между группами не выявлено (χ² с поправкой Йейтса, p = 0,431).
-Через 24 месяца клинически значимое улучшение наблюдалось у 352 пациентов (41,7%) в группе плацебо и у 383 пациентов (45,2%) в группе боярышника; межгрупповые различия также не достигли статистической значимости (χ² с поправкой Йейтса, p = 0,159) (Таблица Х). 
+Как уже отмечалось, клинически значимое улучшение определено как увеличение суммарного балла KCCQ ≥ 5 пунктов по сравнению с исходным уровнем. В анализ включены пациенты с доступной оценкой KCCQ на соответствующем визите. Через 12 месяцев клинически значимое улучшение качества жизни (ΔKCCQ ≥ 5 баллов) было отмечено у 431 пациента (46,3%) в группе плацебо и у 448 пациентов (48,2%) в группе боярышника; статистически значимых различий между группами не выявлено (χ² с поправкой Йейтса, p = 0,431). Через 24 месяца клинически значимое улучшение наблюдалось у 352 пациентов (41,7%) в группе плацебо и у 383 пациентов (45,2%) в группе боярышника; межгрупповые различия также не достигли статистической значимости (χ² с поправкой Йейтса, p = 0,159) (Таблица 1).
 
 ```{r}
 library(gt)
@@ -664,8 +657,8 @@ tbl_resp <- final_tbl %>%
 tbl_resp
 
 ```
-Таблица Х Динамика качества жизни по шкале KCCQ (Клинически значимое улучшение качества жизни по KCCQ)
 
+Таблица 2. Динамика качества жизни по шкале KCCQ (Клинически значимое улучшение качества жизни по KCCQ)
 
 ```{r}
 # 1) Подготовка данных NT-proBNP
@@ -699,7 +692,8 @@ ggplot(dat_bnp, aes(x = BNP0)) +
   ) +
   theme_minimal()
 ```
-Рисунок X. Распределение значений NT-proBNP у пациентов на исходном визите
+
+Рисунок 2. Распределение значений NT-proBNP у пациентов на исходном визите
 
 ```{r}
 ggplot(dat_bnp, aes(x = lBNP0)) +
@@ -711,8 +705,8 @@ ggplot(dat_bnp, aes(x = lBNP0)) +
   ) +
   theme_minimal()
 ```
-Рисунок Y. Плотность распределения логарифмированных значений NT-proBNP на исходном визите
 
+Рисунок 3. Плотность распределения логарифмированных значений NT-proBNP на исходном визите
 
 ```{r, include = FALSE}
 # log-ANCOVA для NT-proBNP
@@ -774,8 +768,8 @@ bnp_table <- bnp_results %>%
 
 ```
 
-Исходные уровни NT-proBNP были сопоставимы между группами лечения. Анализ вторичной конечной точки был выполнен с использованием анализа ковариации (ANCOVA) после логарифмического преобразования значений NT-proBNP с поправкой на исходный уровень показателя. Результаты представлены в виде отношения геометрических средних между группами лечения с соответствующими 95% доверительными интервалами. 
-Статистически значимых различий между группами лечения выявлено не было. Через 12 месяцев наблюдения отношение геометрических средних NT-proBNP (боярышник/плацебо) составило 0,99 (95% ДИ 0,94–1,05; p = 0,824). Через 24 месяца наблюдения соответствующее отношение геометрических средних составило 1,00 (95% ДИ 0,94–1,08; p = 0,914).
+Исходные уровни NT-proBNP были сопоставимы между группами лечения. Анализ вторичной конечной точки был выполнен с использованием анализа ковариации (ANCOVA) после логарифмического преобразования значений NT-proBNP с поправкой на исходный уровень показателя. Результаты представлены в виде отношения геометрических средних между группами лечения с соответствующими 95% доверительными интервалами. Статистически значимых различий между группами лечения выявлено не было. Через 12 месяцев наблюдения отношение геометрических средних NT-proBNP (боярышник/плацебо) составило 0,99 (95% ДИ 0,94–1,05; p = 0,824). Через 24 месяца наблюдения соответствующее отношение геометрических средних составило 1,00 (95% ДИ 0,94–1,08; p = 0,914).
+
 ```{r}
 #  helpers 
 msd  <- function(m, s, d = 1) sprintf(paste0("%.", d, "f±%.", d, "f"), m, s)
@@ -909,11 +903,10 @@ tbl_bnp_log <- tbl_df %>%
 
 tbl_bnp_log
 ```
-Таблица Х. Динамика уровня NT-proBNP
 
+Таблица 3. Динамика уровня NT-proBNP
 
-
-Дополнительно динамика уровни NT-proBNP в зависимости от группы лечения в различных сроках наблюдения отражены на рисунке Х. 
+Дополнительно динамика уровни NT-proBNP в зависимости от группы лечения в различных сроках наблюдения отражены на рисунке Х.
 
 ```{r}
 # 1) Сводка для графика: геометрическое среднее и 95% ДИ
@@ -956,6 +949,166 @@ ggplot(bnp_sum, aes(x = VISIT, y = mean, group = arm, colour = arm)) +
   ) +
   theme_minimal(base_size = 12)
 ```
- Рисунок X. Динамика уровня NT-proBNP в группах лечения
 
+Рисунок 4. Динамика уровня NT-proBNP в группах лечения
 
+ANCOVA анализ безопасности
+
+```{r ancova_v6, echo=TRUE}
+
+# ====== ANCOVA для Креатинина V6 ======
+df_ancova_creat_v6 <- team1 %>%
+  select(USUBJID, ARM, V1_BIO_CREAT, V6_BIO_CREAT) %>%
+  filter(!is.na(V1_BIO_CREAT) & !is.na(V6_BIO_CREAT))
+cat("Sample size - Creatinine V6:\n")
+print(table(df_ancova_creat_v6$ARM))
+ancova_model_creat_v6 <- lm(
+  V6_BIO_CREAT ~ V1_BIO_CREAT + ARM,
+  data = df_ancova_creat_v6
+)
+coef_arm <- coef(ancova_model_creat_v6)["ARMPlacebo"]
+se_arm <- summary(ancova_model_creat_v6)$coefficients["ARMPlacebo", "Std. Error"]
+t_stat <- summary(ancova_model_creat_v6)$coefficients["ARMPlacebo", "t value"]
+p_val <- summary(ancova_model_creat_v6)$coefficients["ARMPlacebo", "Pr(>|t|)"]
+ci_lower <- coef_arm - 1.96 * se_arm
+ci_upper <- coef_arm + 1.96 * se_arm
+# ====== ANCOVA для eGFR V6 ======
+df_ancova_egfr_v6 <- team1 %>%
+  select(USUBJID, ARM, V1_BIO_EGFR, V6_BIO_EGFR) %>%
+  filter(!is.na(V1_BIO_EGFR) & !is.na(V6_BIO_EGFR))
+cat("\nSample size - eGFR V6:\n")
+print(table(df_ancova_egfr_v6$ARM))
+ancova_model_egfr_v6 <- lm(
+  V6_BIO_EGFR ~ V1_BIO_EGFR + ARM,
+  data = df_ancova_egfr_v6
+)
+coef_arm_egfr <- coef(ancova_model_egfr_v6)["ARMPlacebo"]
+se_arm_egfr <- summary(ancova_model_egfr_v6)$coefficients["ARMPlacebo", "Std. Error"]
+t_stat_egfr <- summary(ancova_model_egfr_v6)$coefficients["ARMPlacebo", "t value"]
+p_val_egfr <- summary(ancova_model_egfr_v6)$coefficients["ARMPlacebo", "Pr(>|t|)"]
+ci_lower_egfr <- coef_arm_egfr - 1.96 * se_arm_egfr
+ci_upper_egfr <- coef_arm_egfr + 1.96 * se_arm_egfr
+# ====== ANCOVA для КАЛИЯ V6 ======
+df_ancova_K_v6 <- team1 %>%
+  select(USUBJID, ARM, V1_BIO_K, V6_BIO_K) %>%
+  filter(!is.na(V1_BIO_K) & !is.na(V6_BIO_K))
+cat("Sample size - POTASSIUM V6:\n")
+print(table(df_ancova_K_v6$ARM))
+ancova_model_K_v6 <- lm(
+  V6_BIO_K ~ V1_BIO_K + ARM,
+  data = df_ancova_K_v6
+)
+coef_arm_K <- coef(ancova_model_K_v6)["ARMPlacebo"]
+se_arm_K<- summary(ancova_model_K_v6)$coefficients["ARMPlacebo", "Std. Error"]
+t_stat_K <- summary(ancova_model_K_v6)$coefficients["ARMPlacebo", "t value"]
+p_val_K <- summary(ancova_model_K_v6)$coefficients["ARMPlacebo", "Pr(>|t|)"]
+ci_lower_K <- coef_arm - 1.96 * se_arm
+ci_upper_K <- coef_arm + 1.96 * se_arm
+# ====== ANCOVA для Креатинина V8 ======
+df_ancova_creat_v8 <- team1 %>%
+  select(USUBJID, ARM, V1_BIO_CREAT, V8_BIO_CREAT) %>%
+  filter(!is.na(V1_BIO_CREAT) & !is.na(V8_BIO_CREAT))
+cat("\nSample size - Creatinine V8:\n")
+print(table(df_ancova_creat_v8$ARM))
+ancova_model_creat_v8 <- lm(
+  V8_BIO_CREAT ~ V1_BIO_CREAT + ARM,
+  data = df_ancova_creat_v8
+)
+coef_arm_v8 <- coef(ancova_model_creat_v8)["ARMPlacebo"]
+se_arm_v8 <- summary(ancova_model_creat_v8)$coefficients["ARMPlacebo", "Std. Error"]
+t_stat_v8 <- summary(ancova_model_creat_v8)$coefficients["ARMPlacebo", "t value"]
+p_val_v8 <- summary(ancova_model_creat_v8)$coefficients["ARMPlacebo", "Pr(>|t|)"]
+ci_lower_v8 <- coef_arm_v8 - 1.96 * se_arm_v8
+ci_upper_v8 <- coef_arm_v8 + 1.96 * se_arm_v8
+# ====== ANCOVA для eGFR V8 ======
+df_ancova_egfr_v8 <- team1 %>%
+  select(USUBJID, ARM, V1_BIO_EGFR, V8_BIO_EGFR) %>%
+  filter(!is.na(V1_BIO_EGFR) & !is.na(V8_BIO_EGFR))
+cat("\nSample size - eGFR V8:\n")
+print(table(df_ancova_egfr_v8$ARM))
+ancova_model_egfr_v8 <- lm(
+  V8_BIO_EGFR ~ V1_BIO_EGFR + ARM,
+  data = df_ancova_egfr_v8
+)
+coef_arm_egfr_v8 <- coef(ancova_model_egfr_v8)["ARMPlacebo"]
+se_arm_egfr_v8 <- summary(ancova_model_egfr_v8)$coefficients["ARMPlacebo", "Std. Error"]
+t_stat_egfr_v8 <- summary(ancova_model_egfr_v8)$coefficients["ARMPlacebo", "t value"]
+p_val_egfr_v8 <- summary(ancova_model_egfr_v8)$coefficients["ARMPlacebo", "Pr(>|t|)"]
+ci_lower_egfr_v8 <- coef_arm_egfr_v8 - 1.96 * se_arm_egfr_v8
+ci_upper_egfr_v8 <- coef_arm_egfr_v8 + 1.96 * se_arm_egfr_v8
+# ====== ANCOVA для КАЛИЯ V8 ======
+df_ancova_K_v8 <- team1 %>%
+  select(USUBJID, ARM, V1_BIO_K, V8_BIO_K) %>%
+  filter(!is.na(V1_BIO_K) & !is.na(V8_BIO_K))
+cat("\nSample size - POTASSIUM V8:\n")
+print(table(df_ancova_K_v8$ARM))
+ancova_model_K_v8 <- lm(
+  V8_BIO_K ~ V1_BIO_K + ARM,
+  data = df_ancova_K_v8
+)
+coef_arm_K_v8 <- coef(ancova_model_K_v8)["ARMPlacebo"]
+se_arm_K_v8 <- summary(ancova_model_K_v8)$coefficients["ARMPlacebo", "Std. Error"]
+t_stat_K_v8 <- summary(ancova_model_K_v8)$coefficients["ARMPlacebo", "t value"]
+p_val_K_v8 <- summary(ancova_model_K_v8)$coefficients["ARMPlacebo", "Pr(>|t|)"]
+ci_lower_K_v8 <- coef_arm_v8 - 1.96 * se_arm_v8
+ci_upper_K_v8 <- coef_arm_v8 + 1.96 * se_arm_v8
+```
+
+### Сводная таблица ANCOVA результатов безопасности
+
+```{r summary_ancova_table, echo=TRUE}
+summary_results <- data.frame(
+  Parameter = c("Creatinine", "Creatinine", "eGFR", "eGFR","Potassium","Potassium" ),
+  Visit = c("V6", "V8", "V6", "V8","V6", "V8"),
+  Group_Difference = c(
+    round(coef_arm, 3),
+    round(coef_arm_v8, 3),
+    round(coef_arm_egfr, 2),
+    round(coef_arm_egfr_v8, 2),
+    round(coef_arm_K, 2),
+    round(coef_arm_K_v8, 2)
+  ),
+  CI_Lower = c(
+    round(ci_lower, 3),
+    round(ci_lower_v8, 3),
+    round(ci_lower_egfr, 2),
+    round(ci_lower_egfr_v8, 2),
+    round(ci_lower_K, 2),
+    round(ci_lower_K_v8, 2)
+  ),
+  CI_Upper = c(
+    round(ci_upper, 3),
+    round(ci_upper_v8, 3),
+    round(ci_upper_egfr, 2),
+    round(ci_upper_egfr_v8, 2),
+    round(ci_upper_K, 2),
+    round(ci_upper_K_v8, 2)
+  ),
+  t_stat = c(
+    round(t_stat, 3),
+    round(t_stat_v8, 3),
+    round(t_stat_egfr, 3),
+    round(t_stat_egfr_v8, 3),
+    round(t_stat_K, 3),
+    round(t_stat_K_v8, 3)
+  ),
+  p_value = c(
+    round(p_val, 4),
+    round(p_val_v8, 4),
+    round(p_val_egfr, 4),
+    round(p_val_egfr_v8, 4),
+    round(p_val_K, 4),
+    round(p_val_K_v8, 4)
+  )
+)
+ancova_summary_table <- summary_results %>%
+  flextable() %>%
+  theme_booktabs() %>%
+  autofit() %>%
+  align(j = 2:8, align = "center", part = "all") %>%
+  set_table_properties(layout = "autofit", width = 1) %>%
+  set_caption("ANCOVA анализ - Сравнение групп (Placebo vs Crataegus, adjusted for V1)")
+ancova_summary_table
+```
+
+ANCOVA анализ показал отсутствие статистически значимых различий между группами Crataegus и Placebo по показателям функции почек (креатинин и eGFR) и уровню электролитов (калий) на всех визитах. Креатинин существенно не отличался (12 месяцев: p=0.437; 24 месяца: p=0.099), eGFR показал аналогичный результат (12 месяцев: p=0.119; 24 месяца: p=0.311). Уровень калия был идентичен между группами (12 месяцев: p=0.970; 24 месяца: p=0.323). Таким образом, препарат Crataegus продемонстрировал профиль безопасности, сопоставимый с плацебо, без явных признаков нефротоксичности или электролитного дисбаланса.
