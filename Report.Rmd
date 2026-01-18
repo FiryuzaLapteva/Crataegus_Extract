@@ -21,13 +21,21 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(flextable)
 library(tidyverse)
+library(summarytools)
 ```
 
 ```{r}
 team1 <- read.csv("data/team1_ecrf_wide.csv", sep = ",")
 ```
 
+```{r warning=FALSE}
+variability <- team1|>
+  dfSummary(graph.col = TRUE,
+            style = "grid",
+            graph.magnif = 0.75)
+print(variability, method = "render")
 
+```
 
 
 
