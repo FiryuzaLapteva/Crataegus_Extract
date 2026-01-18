@@ -163,8 +163,8 @@ tbl_baseline <-
     ),
     statistic = list(
       all_continuous() ~ "{mean} ± {sd}",
-      c(V1_BIO_NTPROBNP, V1_KCCQ_OS) ~ "{median} [{p25}, {p75}]",
-      all_categorical() ~ "{n} ({p}%)"
+      c(V1_BIO_NTPROBNP, V1_KCCQ_OS) ~ "{median} [{p25}, {p75}]", # ЭКГ и витальные показатели
+      all_categorical() ~ "{n} ({p})"
     ),
     digits = list(
       all_continuous() ~ 1,
@@ -180,8 +180,115 @@ tbl_baseline
 
 
 
+```{r km_primary, fig.width=14, fig.height=8, dpi=300}
 
 
+fit_arm <- survfit(
+  Surv(V0_END_TTE_COMP_M, V0_END_COMP_EVENT) ~ ARM,
+  data = team1
+)
+
+p_km <- ggsurvplot(
+  fit_arm,
+  data = team1,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  tables.height = 0.2,
+  pval = TRUE,
+  break.time.by = 6,
+  xlim = c(0, 36),
+  xlab = "Месяцы наблюдения",
+  ylab = "Выживаемость без события",
+  legend.title = "Группа лечения",
+  legend.labs = c("Плацебо", "Crataegus"),
+  risk.table.y.text.col = TRUE,
+  risk.table.y.text = FALSE
+)
+
+p_km$plot <- p_km$plot +
+  theme(plot.margin = margin(5, 10, 5, 55))
+
+p_km$table <- p_km$table +
+  theme(plot.margin = margin(0, 0, 0, 15))
+
+p_km
+```
+
+ТАБЛИЦА ВЫЖИВАЕМОСТИ
+```{r}
+summary(
+  fit_arm,
+  times = c(6, 12, 24, 36)
+)
+```
+
+
+
+```{r}
+
+dat_primary <- team1 %>%
+  transmute(
+    usubjid = USUBJID,
+    arm = factor(ARM, levels = c("Placebo", "Crataegus")),
+    time_m = V0_END_TTE_COMP_M,
+    event  = as.integer(V0_END_COMP_EVENT == 1)
+  ) %>%
+  filter(!is.na(time_m), !is.na(event), !is.na(arm))
+
+# Log-rank (как в DAPA-HF рядом с KM)
+lr <- survdiff(Surv(time_m, event) ~ arm, data = dat_primary)
+
+# Cox (основной эффект: HR)
+fit_cox <- coxph(Surv(time_m, event) ~ arm, data = dat_primary)
+summary(fit_cox)
+```
+```{r km_primary_event, fig.width=7.5, fig.height=6.5, dpi=300}
+
+library(survival)
+library(survminer)
+
+
+fit_arm <- survfit(
+  Surv(V0_END_TTE_COMP_M, V0_END_COMP_EVENT) ~ ARM,
+  data = team1
+)
+
+nejm_theme <- theme_classic(base_size = 12) +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.title = element_text(size = 12),
+    axis.text  = element_text(size = 11)
+  )
+
+p <- ggsurvplot(
+  fit_arm,
+  data = team1,
+
+  fun = "event",          # ← ВАЖНО: 1 − S(t)
+  conf.int = FALSE,
+
+  pval = TRUE,
+  risk.table = TRUE,
+  risk.table.height = 0.22,
+  risk.table.y.text = FALSE,
+
+  break.time.by = 6,
+  xlim = c(0, 24),
+  xlab = "Месяцы",
+  ylab = "Накопленная частота",
+
+  legend.labs = c("Плацебо", "Crataegus"),
+
+  censor = TRUE,
+  censor.shape = 124,
+
+  ggtheme = nejm_theme,
+  tables.theme = theme_classic(base_size = 11)
+)
+
+p
+```
 
 
 
