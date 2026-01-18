@@ -317,7 +317,7 @@ dat_kccq <- team1 %>%
 ```
 
 
-```{r ancova}
+```{r ancova, include = FALSE}
 fit12 <- lm(KCCQ_12 ~ ARM + KCCQ_BL, data = dat_kccq)
 
 res12 <- broom::tidy(fit12, conf.int = TRUE) %>%
@@ -715,7 +715,7 @@ ggplot(dat_bnp, aes(x = lBNP0)) +
 
 В связи с выраженной асимметрией распределения NT-proBNP анализ проводился с использованием логарифмического преобразования; результаты представлены в виде геометрических средних и отношений геометрических средних с 95% доверительными интервалами
 
-```{r}
+```{r, include = FALSE}
 # log-ANCOVA для NT-proBNP
 
 fit12 <- lm(lBNP12 ~ arm + lBNP0, data = dat_bnp)
