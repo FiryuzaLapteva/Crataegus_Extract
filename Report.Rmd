@@ -1,0 +1,54 @@
+---
+title: '**Проспективное, многоцентровое, рандомизированное, двойное слепое, плацебо-контролируемое клиническое исследование эффективности и безопасности экстракта боярышника (Crataegus) у пациентов с хронической сердечной недостаточностью со сниженной фракцией выброса левого желудочка.**'
+author: 'Выполнил(и): Бектур	Бердибеков, Анастасия	Генералова, Ирина	Михайлова, Фирюза Лаптева'
+output:
+  word_document:
+    toc: true
+    toc_depth: 4
+  html_document:
+    number_sections: true
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 4
+  pdf_document:
+    toc: true
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(flextable)
+library(tidyverse)
+```
+
+```{r}
+team1 <- read.csv("data/team1_ecrf_wide.csv", sep = ",")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
