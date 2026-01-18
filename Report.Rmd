@@ -26,6 +26,7 @@ library(survminer)      # для выживаемости
 library(survival) 
 library(survRM2)        # для RMST
 library(gt)             # форматирование таблиц
+library(kableExtra)
 ```
 
 ```{r}
@@ -40,34 +41,65 @@ data_surv <- team1 |>
   )
 ```
 
-# Общая таблица
-```{r warning=FALSE}
-variability <- team1|>
-  dfSummary(graph.col = TRUE,
-            style = "grid",
-            graph.magnif = 0.75)
-print(variability, method = "render")
+# ПКТ
 
-```
+Для оценка первичной конечной точки  будет проведен анализ с использованием модели пропорциональных рисков Кокса (Cox Proportional Hazards Model).
 
-# Общая Выживаемость
+Для подтверждения корректности использования модели Кокса была проведена проверка допущения о пропорциональности рисков (тест на основе остатков Шонфилда). Результаты теста (p=0.28 для группы терапии и p=0.28 для модели в целом) подтверждают соблюдение допущения о пропорциональности рисков. Это позволяет считать полученную оценку Hazard Ratio (HR) корректной и стабильной на всем интервале наблюдения (24 месяца).
 
-Первичный анализ эффективности будет проведен путем построения кривых выживаемости по методу Каплана-Мейера.
-
-Статистическая значимость различий между группами будет оценена с помощью лог-рангового критерия
+Данное конфирматорное исследование было спланировано с мощностью 80% для обнаружения HR=0.78. Полученный результат HR=1.01 при p=0.87 свидетельствует о том, что в данной популяции пациентов, получающих оптимальную современную терапию ХСН, добавление экстракта боярышника не приносит дополнительного статистически значимого снижения риска по жестким конечным точкам.
 
 ```{r}
+cox_fit <- coxph(Surv(Time, Event_OS) ~ group, data = data_surv)
+
+pretty_table <- cox_fit |>
+  broom::tidy(exponentiate = TRUE, conf.int = TRUE) |>
+  mutate(
+    HR = sprintf("%.2f", estimate),
+    `95% CI` = sprintf("%.2f-%.2f", conf.low, conf.high),
+    p_value = case_when(
+      p.value < 0.001 ~ "<0.001",
+      p.value < 0.01 ~ sprintf("%.3f", p.value),
+      TRUE ~ sprintf("%.3f", p.value)
+    ),
+    Significance = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01 ~ "**",
+      p.value < 0.05 ~ "*",
+      TRUE ~ ""
+    )
+  ) |>
+  select(
+    Переменная = term,
+    HR,
+    `95% CI`,
+    `p-value` = p_value,
+    Significance
+  ) |>
+  kable()
+# summary(cox_fit)
+pretty_table
+```
+
+```{r fig.width=8, fig.height=6}
+# Запускаем тест на пропорциональность
+test_ph <- cox.zph(cox_fit)
+
+print(test_ph)
+
+# Рисуем графики для визуальной оценки
+
+ggcoxzph(test_ph)
+```
+# ВКТ
+
+Кривые выживаемости групп боярышника и плацебо практически полностью накладываются друг на друга на протяжении всех 24 месяцев. Наличие широких и пересекающихся доверительных интервалов (shaded areas) подтверждает отсутствие статистически значимого расхождения. Терапия не продемонстрировала превосходства над плацебо.
+
+```{r fig.height=8, fig.width=10}
 surv_object <- Surv(time = data_surv$Time, event = data_surv$Event_OS)
 
 fit_2 <- survfit(surv_object ~ group, data = data_surv)
 
-q2 <- quantile(fit_2, probs = c(0.25, 0.5, 0.75),
-               conf.int = TRUE)
-as.data.frame(q2)
-```
-
-
-```{r fig.height=8, fig.width=10}
 p2 <- ggsurvplot(fit_2, 
                  data = data_surv,
                  conf.int = TRUE,
@@ -77,11 +109,13 @@ p2 <- ggsurvplot(fit_2,
                  tables.height = 0.25,
                  pval = TRUE,
                  pval.coord = c(22, 0.7),
-                 break.time.by = 2,
+                 break.time.by = 6,
                  xlim = c(0, 24))
 p2
 ```
-# Выживаемость по типу первого композитного ключа
+Значение p=1(крайне редкое для реальных данных) указывает на абсолютную идентичность кривых накопления событий госпитализации в обеих группах. Это означает, что вероятность попасть в больницу с декомпенсацией СН была абсолютно одинаковой как для пациентов, принимавших Crataegus, так и для группы контроля. 
+
+В отношении наиболее «жесткой» точки — смертности — наблюдается минимальное, статистически незначимое расхождение кривых. 
 ```{r  fig.height=8, fig.width=10}
 event_types <- c("HF_HOSP", "CV_DEATH")
 
@@ -103,7 +137,7 @@ plots_list <- map(event_types, function(current_event) {
              title = paste("Outcome:", current_event), # Используем current_event
              xlab = "Months",
              xlim = c(0, 24),
-             break.time.by = 2,
+             break.time.by = 6,
              palette = "Dark2")
 })
 
