@@ -20,21 +20,162 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 
 library(flextable)
+library(readr)
+library(gtsummary)
+library(dplyr)
+library(ggplot2)
+library(epitools)
 library(tidyverse)
+library(readxl)
+library(janitor)
+library(broom)
+library(haven)
+library(survival)
+library(survminer)
+library(tidyr)
 ```
 
 ```{r}
-team1 <- read.csv("data/team1_ecrf_wide.csv", sep = ",")
+team1 <- read_csv("data/team1_ecrf_wide.csv")
+```
+
+```{r}
+n_distinct(team1$USUBJID)
+table(team1$ARM)
+```
+```{r}
+names(team1)
 ```
 
 
+```{r}
+
+screening <- team1 %>%
+  mutate(
+    fail_age  = V1_DEM_AGE < 18,
+    fail_sex  = is.na(V1_DEM_SEX),
+    fail_ntp  = V1_BIO_NTPROBNP < 600,   # условно, по протоколу
+    fail_egfr = V1_BIO_EGFR < 30,
+    any_fail  = fail_age | fail_sex | fail_ntp | fail_egfr
+  )
+
+table(screening$any_fail)
+```
+
+```{r}
+screening %>%
+  summarise(
+    fail_age  = sum(fail_age,  na.rm = TRUE),
+    fail_sex  = sum(fail_sex,  na.rm = TRUE),
+    fail_ntp  = sum(fail_ntp,  na.rm = TRUE),
+    fail_egfr = sum(fail_egfr, na.rm = TRUE),
+    any_fail  = sum(any_fail,  na.rm = TRUE)
+  )
+```
+
+```{r}
+
+baseline_vars <- team1 %>%
+  select(
+    V1_DEM_AGE,
+    V1_ANT_BMI,
+    V1_BIO_NTPROBNP,
+    V1_BIO_EGFR,
+    V1_BIO_CREAT,
+    V1_BIO_K,
+    V1_KCCQ_OS
+  )
+
+summary(baseline_vars)
+```
+
+
+*По доступным данным визита V1 формальные отклонения от критериев включения/невключения были выявлены у 417 пациентов (19.0%). Основной вклад (398 пациентов, 94.5%) был обусловлен значениями NT-proBNP ниже условно принятого порога ≥600 пг/мл. Следует отметить, что в базе отсутствовали данные о наличии фибрилляции предсердий и недавних госпитализаций по поводу ХСН, что не позволило применить дифференцированные пороги NT-proBNP, предусмотренные протоколом. Кроме того, у 23 пациентов (1.0%) отмечалось снижение eGFR <30 мл/мин/1,73 м². Несмотря на то что снижение eGFR <30 мл/мин/1,73 м² являлось формальным критерием невключения, данные пациенты не были исключены из основного анализа, который выполнялся по принципу intention-to-treat.  Выявленные несоответствия по NT-proBNP следует рассматривать как потенциальные и обусловленные ограничениями доступных данных*
 
 
 
 
+```{r}
 
+tbl_baseline <-
+  team1 %>%
+  mutate(
+    ARM = factor(ARM, levels = c("Placebo", "Crataegus")),
+    male = factor(ifelse(V1_DEM_SEX == "M", 1, 0),
+                  levels = c(0, 1), labels = c("Нет", "Да")),
+    across(ends_with("_ABN"),
+           ~factor(.x, levels = c(0, 1),
+                   labels = c("Норма", "Отклонение")))
+  ) %>%
+  select(
+    ARM,
 
+    # Демография
+    V1_DEM_AGE,
+    male,
 
+    # Антропометрия
+    V1_ANT_BMI,
+
+    # Лабораторные показатели
+    V1_BIO_NTPROBNP,
+    V1_BIO_EGFR,
+    V1_BIO_CREAT,
+    V1_BIO_K,
+
+    # Качество жизни
+    V1_KCCQ_OS,
+
+    # ЭКГ и витальные показатели
+    V1_ECG_RHYTHM_ABN,
+    V1_ECG_STT_ABN,
+    V1_ECG_QT_ABN,
+    V1_VIT_BP_ABN,
+    V1_VIT_HR_ABN,
+    V1_VIT_RR_ABN,
+    V1_VIT_TEMP_ABN
+  ) %>%
+  tbl_summary(
+    by = ARM,
+    value = list(
+      male ~ "Да",
+      ends_with("_ABN") ~ "Отклонение"
+    ),
+    label = list(
+      V1_DEM_AGE ~ "Возраст, лет",
+      male ~ "Пол: мужской",
+      V1_ANT_BMI ~ "Индекс массы тела, кг/м²",
+
+      V1_BIO_NTPROBNP ~ "NT-proBNP, пг/мл",
+      V1_BIO_EGFR ~ "СКФ (eGFR), мл/мин/1,73 м²",
+      V1_BIO_CREAT ~ "Креатинин, мг/дл",
+      V1_BIO_K ~ "Калий, ммоль/л",
+
+      V1_KCCQ_OS ~ "KCCQ (общий балл), 0–100",
+
+      V1_ECG_RHYTHM_ABN ~ "ЭКГ: нарушения ритма",
+      V1_ECG_STT_ABN ~ "ЭКГ: изменения ST–T",
+      V1_ECG_QT_ABN ~ "ЭКГ: удлинение QT",
+      V1_VIT_BP_ABN ~ "Артериальное давление (откл.)",
+      V1_VIT_HR_ABN ~ "Частота сердечных сокращений (откл.)",
+      V1_VIT_RR_ABN ~ "Частота дыхательных движений (откл.)",
+      V1_VIT_TEMP_ABN ~ "Температура тела (откл.)"
+    ),
+    statistic = list(
+      all_continuous() ~ "{mean} ± {sd}",
+      c(V1_BIO_NTPROBNP, V1_KCCQ_OS) ~ "{median} [{p25}, {p75}]",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits = list(
+      all_continuous() ~ 1,
+      all_categorical() ~ c(0, 1)
+    ),
+    missing = "no"
+  ) %>%
+  bold_labels()
+
+tbl_baseline
+```
 
 
 
