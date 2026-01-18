@@ -251,6 +251,20 @@ table(team1$death_before_24m, useNA = "ifany")
 
 ANCOVA 
 
+
+```{r}
+# 1) Подготовка данных KCCQ для ANCOVA
+dat_kccq <- team1 %>%
+  transmute(
+    USUBJID,
+    ARM = factor(ARM, levels = c("Placebo", "Crataegus")),
+    KCCQ_BL = V1_KCCQ_OS,
+    KCCQ_12 = ifelse(death_before_12m, NA, V6_KCCQ_OS),
+    KCCQ_24 = ifelse(death_before_24m, NA, V8_KCCQ_OS)
+  )
+```
+
+
 ```{r}
 fit12 <- lm(KCCQ_12 ~ ARM + KCCQ_BL, data = dat_kccq)
 
@@ -403,7 +417,7 @@ tbl_kccq <- tbl_df %>%
   ) %>%
   cols_align("left", columns = c(`Конечная точка`)) %>%
   cols_align("center", columns = c(`Плацебо`, `Боярышник`, `Средняя межгрупповая разница (95% ДИ)`, `p-значение`)) %>%
-  fmt_missing(everything(), missing_text = "") %>%
+ sub_missing(everything(), missing_text = "") %>%
   tab_options(
     table.font.size = px(12),
     row_group.font.weight = "bold",
