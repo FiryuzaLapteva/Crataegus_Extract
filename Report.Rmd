@@ -495,4 +495,220 @@ print(
   quote = FALSE,
   noSpaces = TRUE
 )
+
+# V6 (12 months)
+
+vars_cont_v6 <- c(
+  "V6_ECHO_LVEF",
+  "V6_ECHO_LVEDV",
+  "V6_BIO_NTPROBNP",
+  "V6_BIO_EGFR",
+  "V6_BIO_CREAT",
+  "V6_BIO_K",
+  "V6_KCCQ_OS"
+)
+
+vars_cat_v6 <- c(
+  "V6_VIT_HR_ABN",
+  "V6_VIT_RR_ABN",
+  "V6_VIT_BP_ABN",
+  "V6_VIT_TEMP_ABN",
+  "V6_ECG_RHYTHM_ABN",
+  "V6_ECG_STT_ABN",
+  "V6_ECG_QT_ABN"
+)
+
+vars_all_v6 <- c(vars_cont_v6, vars_cat_v6)
+vars_cat_v6 <- vars_cat_v6
+
+tab_v6 <- CreateTableOne(
+  vars = vars_all_v6,
+  strata = "ARM",
+  data = df,
+  factorVars = vars_cat_v6,
+  addOverall = TRUE
+)
+
+print(tab_v6, showAllLevels = TRUE, smd = TRUE, quote = FALSE, noSpaces = TRUE)
+
+# V8 (24 months)
+
+vars_cont_v8 <- c(
+  "V8_ECHO_LVEF",
+  "V8_ECHO_LVEDV",
+  "V8_BIO_NTPROBNP",
+  "V8_BIO_EGFR",
+  "V8_BIO_CREAT",
+  "V8_BIO_K",
+  "V8_KCCQ_OS"
+)
+
+vars_cat_v8 <- c(
+  "V8_VIT_HR_ABN",
+  "V8_VIT_RR_ABN",
+  "V8_VIT_BP_ABN",
+  "V8_VIT_TEMP_ABN",
+  "V8_ECG_RHYTHM_ABN",
+  "V8_ECG_STT_ABN",
+  "V8_ECG_QT_ABN"
+)
+
+vars_cat_v8_extra <- c("V8_VIT_SBP_ABN", "V8_VIT_DBP_ABN")
+vars_cat_v8 <- unique(c(vars_cat_v8, vars_cat_v8_extra))
+
+vars_all_v8 <- c(vars_cont_v8, vars_cat_v8)
+vars_cat_v8 <- vars_cat_v8
+
+tab_v8 <- CreateTableOne(
+  vars = vars_all_v8,
+  strata = "ARM",
+  data = df,
+  factorVars = vars_cat_v8,
+  addOverall = TRUE
+)
+
+print(tab_v8, showAllLevels = TRUE, smd = TRUE, quote = FALSE, noSpaces = TRUE)
+
 ```
+
+Связи
+
+```{r}
+ggplot(df %>% filter(V1_BIO_NTPROBNP > 0),
+       aes(x = V1_BIO_EGFR, y = log10(V1_BIO_NTPROBNP))) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(
+    x = "eGFR (ml/min)",
+    y = "log10(NT-proBNP)",
+    title = "NT-proBNP vs eGFR"
+  )
+
+ggplot(df %>% filter(V1_BIO_NTPROBNP > 0),
+       aes(x = V1_ANT_BMI, y = log10(V1_BIO_NTPROBNP))) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(
+    x = "BMI (kg/m²)",
+    y = "log10(NT-proBNP)",
+    title = "NT-proBNP vs BMI"
+  )
+
+ggplot(df %>% filter(V1_BIO_NTPROBNP > 0),
+       aes(x = V1_KCCQ_OS, y = log10(V1_BIO_NTPROBNP))) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(
+    x = "KCCQ Overall Score",
+    y = "log10(NT-proBNP)",
+    title = "NT-proBNP vs KCCQ"
+    
+  )
+
+ggplot(df %>% filter(V1_BIO_NTPROBNP > 0),
+       aes(x = V1_BIO_EGFR, y = log10(V1_BIO_NTPROBNP), color = ARM)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "NT-proBNP vs eGFR by ARM")
+
+```
+
+Разведывательный анализ не выявил выраженных зависимостей между уровнем NT-proBNP и функцией почек, индексом массы тела или показателями качества жизни на исходном уровне. Формы зависимостей сопоставимы между группами лечения, что свидетельствует об отсутствии исходных систематических различий.
+
+Динамика во времени
+
+```{r}
+long_dyn <- df %>%
+  select(
+    USUBJID, ARM,
+    V1_BIO_NTPROBNP, V6_BIO_NTPROBNP, V8_BIO_NTPROBNP,
+    V1_BIO_EGFR,     V6_BIO_EGFR,     V8_BIO_EGFR,
+    V1_KCCQ_OS,      V6_KCCQ_OS,      V8_KCCQ_OS
+  ) %>%
+  pivot_longer(
+    cols = -c(USUBJID, ARM),
+    names_to = c("Visit", "Parameter"),
+    names_pattern = "V(\\d+)_(.*)",
+    values_to = "Value"
+  ) %>%
+  mutate(
+    Visit = recode(Visit, "1" = "V1", "6" = "V6", "8" = "V8"),
+    Visit = factor(Visit, levels = c("V1", "V6", "V8"))
+  )
+
+long_dyn %>%
+  filter(Parameter == "BIO_NTPROBNP", Value > 0) %>%
+  ggplot(aes(x = Visit, y = log10(Value))) +
+  geom_boxplot() +
+  labs(
+    title = "NT-proBNP over time (log scale)",
+    y = "log10(NT-proBNP)"
+  )
+
+long_dyn %>%
+  filter(Parameter == "BIO_EGFR") %>%
+  ggplot(aes(x = Visit, y = Value)) +
+  geom_boxplot() +
+  labs(title = "eGFR over time", y = "eGFR (ml/min)")
+
+long_dyn %>%
+  filter(Parameter == "KCCQ_OS") %>%
+  ggplot(aes(x = Visit, y = Value)) +
+  geom_boxplot() +
+  labs(title = "KCCQ Overall Score over time")
+
+long_dyn %>%
+  filter(Parameter == "BIO_NTPROBNP", Value > 0) %>%
+  ggplot(aes(x = Visit, y = log10(Value), fill = ARM)) +
+  geom_boxplot(position = position_dodge(width = 0.8)) +
+  labs(
+    title = "NT-proBNP over time by ARM",
+    y = "log10(NT-proBNP)"
+  )
+```
+
+Разведывательный анализ динамики NT-proBNP, функции почек и показателей качества жизни показал клинически правдоподобные и сопоставимые между группами изменения во времени без неожиданных паттернов.
+
+Композитные события и время до события
+
+```{r}
+df %>%
+  count(V0_END_COMP_EVENT)
+df %>%
+  count(ARM, V0_END_COMP_EVENT) %>%
+  group_by(ARM) %>%
+  mutate(prop = n / sum(n))
+summary(df$V0_END_TTE_COMP_M)
+ggplot(df, aes(x = V0_END_TTE_COMP_M)) +
+  geom_histogram(bins = 30) +
+  labs(
+    title = "Time to first composite event",
+    x = "Months",
+    y = "Count"
+  )
+ggplot(df, aes(x = V0_END_TTE_COMP_M, fill = ARM)) +
+  geom_histogram(position = "identity", alpha = 0.5, bins = 30) +
+  labs(
+    title = "Time to first composite event by ARM",
+    x = "Months"
+  )
+df %>%
+  count(V0_END_COMP_TYPE)
+df %>%
+  count(ARM, V0_END_COMP_TYPE) %>%
+  group_by(ARM) %>%
+  mutate(prop = n / sum(n))
+
+```
+
+В течение периода наблюдения композитное событие было зафиксировано у большинства пациентов. Структура композитной конечной точки соответствует клиническим ожиданиям для популяции пациентов с хронической сердечной недостаточностью.
+
+Наиболее частым компонентом композитной точки являлась госпитализация по поводу ХСН (HF_HOSP), на долю которой пришлось 55.4% всех пациентов. Сердечно-сосудистая смерть (CV_DEATH) была зарегистрирована у 23.1% пациентов, тогда как 21.5% пациентов были цензурированы к концу периода наблюдения.
+
+Распределение типов композитных событий было практически идентичным между группами лечения. В группе Crataegus доля HF_HOSP составила 55.8%, CV_DEATH - 23.0%, цензурирование - 21.2%. В группе Placebo соответствующие значения составили 55.0%, 23.3% и 21.7%. Клинически значимых различий в структуре событий между группами не выявлено.
+
+### Время до первого композитного события
+
+Распределение времени до первого композитного события охватывало весь период наблюдения. Минимальное время до события составило 0.01 месяца, медиана 10.9 месяца, среднее значение 12.3 месяца, максимальное 24 месяца.
+
+При стратификации по группам лечения формы распределений времени до события практически полностью перекрываются. Существенных различий между группами Crataegus и Placebo на разведывательном уровне не наблюдается.
