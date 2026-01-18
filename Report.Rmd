@@ -39,10 +39,7 @@ library(tidyr)
 team1 <- read_csv("data/team1_ecrf_wide.csv")
 ```
 
-```{r}
-n_distinct(team1$USUBJID)
-table(team1$ARM)
-```
+
 ```{r}
 names(team1)
 ```
