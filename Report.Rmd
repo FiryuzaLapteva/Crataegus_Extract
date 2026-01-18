@@ -22,6 +22,8 @@ knitr::opts_chunk$set(echo = TRUE)
 library(flextable)
 library(tidyverse)
 library(readxl)
+library(tableone)
+library(gtsummary)
 ```
 
 ```{r}
@@ -29,7 +31,7 @@ team1 <- read.csv("data/team1_ecrf_wide.csv", sep = ",")
 dict <- read_excel("data/team1_ecrf_data_dictionary.xlsx")
 ```
 
-Объем выборки
+## Объем выборки
 
 ```{r}
 df <- team1
@@ -40,7 +42,7 @@ cat("Всего строк:", n_total, "\n")
 cat("Уникальных пациентов:", n_unique_patients, "\n")
 ```
 
-QC
+## QC. Критерии включения/невключения
 
 ```{r}
 na_summary <- df %>%
@@ -52,8 +54,10 @@ na_summary <- df %>%
   ) %>%
   arrange(desc(na_percent))
 
-print(na_summary)
+# print(na_summary)
 ```
+
+Отсутствующих значений в выборке не обнаружено.
 
 ```{r}
 df %>% count(ARM)
@@ -70,8 +74,10 @@ binary_check <- map_dfr(binary_vars, function(v) {
     mutate(variable = v)
 })
 
-print(binary_check)
+# print(binary_check)
 ```
+
+Все бинарные показатели имеют 2 заданных уровня значений.
 
 ```{r}
 qc_long <- df %>%
@@ -173,13 +179,13 @@ qc_flags <- bind_rows(
   select(USUBJID, ARM, variable, value, issue) %>%
   arrange(variable, USUBJID)
 
-print(qc_flags)
-
-qc_summary <- qc_flags %>% count(variable, issue)
-print(qc_summary)
+# print(qc_flags)
+# 
+# qc_summary <- qc_flags %>% count(variable, issue)
+# print(qc_summary)
 ```
 
-Критерии включения/невключения
+14 пациентов из выборки имеют ненормальный ИМТ согласно значениям, заданным в словаре.
 
 ```{r}
 df_crit <- df %>%
@@ -224,41 +230,9 @@ ntprobnp_below600 <- df_crit %>%
   transmute(USUBJID, ARM, V1_BIO_NTPROBNP, inc_ntprobnp_ge600) %>%
   filter(!inc_ntprobnp_ge600)
 
-print(criteria_summary)
-print(violations_strict)
-print(ntprobnp_below600)
-```
-
-```{r}
-bmi_check <- df %>%
-  filter(
-    !is.na(V1_ANT_HEIGHTCM),
-    !is.na(V1_ANT_WEIGHTKG),
-    !is.na(V1_ANT_BMI)
-  ) %>%
-  mutate(
-    bmi_calc = V1_ANT_WEIGHTKG / (V1_ANT_HEIGHTCM / 100)^2,
-    bmi_diff = V1_ANT_BMI - bmi_calc,
-    bmi_diff_abs = abs(bmi_diff)
-  )
-
-summary(bmi_check$bmi_diff_abs)
-
-bmi_mismatch <- bmi_check %>%
-  filter(bmi_diff_abs > 1) %>%
-  arrange(desc(bmi_diff_abs)) %>%
-  select(
-    USUBJID,
-    ARM,
-    V1_ANT_HEIGHTCM,
-    V1_ANT_WEIGHTKG,
-    V1_ANT_BMI,
-    bmi_calc,
-    bmi_diff
-  )
-
-print(bmi_mismatch)
-
+# print(criteria_summary)
+# print(violations_strict)
+# print(ntprobnp_below600)
 ```
 
 ```{r}
@@ -266,7 +240,7 @@ event_check <- df %>%
   filter(V0_END_COMP_EVENT == 1) %>%
   filter(is.na(V0_END_TTE_COMP_M) | V0_END_TTE_COMP_M < 0)
 
-print(event_check %>% select(USUBJID, V0_END_COMP_EVENT, V0_END_TTE_COMP_M))
+# print(event_check %>% select(USUBJID, V0_END_COMP_EVENT, V0_END_TTE_COMP_M))
 ```
 
 -   Структура датасета и идентификаторы пациентов корректны, дубликаты отсутствуют.
@@ -277,113 +251,79 @@ print(event_check %>% select(USUBJID, V0_END_COMP_EVENT, V0_END_TTE_COMP_M))
 
 -   Категориальные переменные (пол, группа лечения) имеют ожидаемые уровни без ошибок.
 
--   Критичные переменные не содержат значимых пропусков.
+-   Критичные переменные не содержат пропусков.
 
--   Пересчет BMI подтвердил корректность значений, расхождения минимальны и связаны с округлением.
+-   По согласованию с регулятором, в выборку вошли пациенты, не удовлетворяющие исходным критериям по ИМТ и СКФ.
 
 ```{r}
-bmi_wrong <- df %>%
-  filter(
-    !is.na(V1_ANT_BMI),
-    (V1_ANT_BMI < 15 | V1_ANT_BMI > 60)
-  ) %>%
-  select(
-    USUBJID,
-    ARM,
-    V1_ANT_HEIGHTCM,
-    V1_ANT_WEIGHTKG,
-    V1_ANT_BMI
-  ) %>%
-  arrange(V1_ANT_BMI)
-
-print(bmi_wrong)
+# При необходимости - посмотреть, какой рост и вес у людей с ненормальным ИМТ.
+# bmi_wrong <- df %>%
+#   filter(
+#     !is.na(V1_ANT_BMI),
+#     (V1_ANT_BMI < 15 | V1_ANT_BMI > 60)
+#   ) %>%
+#   select(
+#     USUBJID,
+#     ARM,
+#     V1_ANT_HEIGHTCM,
+#     V1_ANT_WEIGHTKG,
+#     V1_ANT_BMI
+#   ) %>%
+#   arrange(V1_ANT_BMI)
+# 
+# print(bmi_wrong)
 
 ```
 
-Описательная статистика
+## Описательная статистика
 
 ```{r}
-vars_cont <- c(
-  "V1_DEM_AGE",
-  "V1_ANT_HEIGHTCM",
-  "V1_ANT_WEIGHTKG",
-  "V1_ANT_BMI",
-  "V1_BIO_NTPROBNP",
-  "V1_BIO_EGFR",
-  "V1_BIO_CREAT",
-  "V1_BIO_K",
-  "V1_KCCQ_OS"
-)
-
-desc_overall <- df %>%
-  select(any_of(vars_cont)) %>%
-  pivot_longer(
-    cols = everything(),
-    names_to = "variable",
-    values_to = "value"
-  ) %>%
-  summarise(
-    n = sum(!is.na(value)),
-    mean = mean(value, na.rm = TRUE),
-    sd = sd(value, na.rm = TRUE),
-    median = median(value, na.rm = TRUE),
-    q1 = quantile(value, 0.25, na.rm = TRUE),
-    q3 = quantile(value, 0.75, na.rm = TRUE),
-    min = min(value, na.rm = TRUE),
-    max = max(value, na.rm = TRUE),
-    .by = variable
-  )
-
-print(desc_overall)
-
-desc_overall_fmt <- desc_overall %>%
+tbl_by_arm <- df %>%
   mutate(
-    mean_sd = sprintf("%.1f ± %.1f", mean, sd),
-    median_iqr = sprintf("%.1f [%.1f; %.1f]", median, q1, q3),
-    min_max = sprintf("%.1f–%.1f", min, max)
+    ARM = factor(ARM, levels = c("Placebo", "Crataegus"))
   ) %>%
   select(
-    variable,
-    n,
-    mean_sd,
-    median_iqr,
-    min_max
-  )
-
-print(desc_overall_fmt)
-
-desc_by_arm <- df %>%
-  select(ARM, any_of(vars_cont)) %>%
-  pivot_longer(
-    cols = -ARM,
-    names_to = "variable",
-    values_to = "value"
-  ) %>%
-  summarise(
-    n = sum(!is.na(value)),
-    mean = mean(value, na.rm = TRUE),
-    sd = sd(value, na.rm = TRUE),
-    median = median(value, na.rm = TRUE),
-    q1 = quantile(value, 0.25, na.rm = TRUE),
-    q3 = quantile(value, 0.75, na.rm = TRUE),
-    .by = c(ARM, variable)
-  )
-
-desc_by_arm_fmt <- desc_by_arm %>%
-  mutate(
-    mean_sd = sprintf("%.1f ± %.1f", mean, sd),
-    median_iqr = sprintf("%.1f [%.1f; %.1f]", median, q1, q3)
-  ) %>%
-  select(
-    variable,
     ARM,
-    n,
-    mean_sd,
-    median_iqr
+    V1_DEM_AGE,
+    V1_ANT_HEIGHTCM,
+    V1_ANT_WEIGHTKG,
+    V1_ANT_BMI,
+    V1_BIO_NTPROBNP,
+    V1_BIO_EGFR,
+    V1_BIO_CREAT,
+    V1_BIO_K,
+    V1_KCCQ_OS
   ) %>%
-  arrange(variable, ARM)
+  tbl_summary(
+    by = ARM,
+    type = list(all_continuous() ~ "continuous2"),
+    statistic = list(
+      all_continuous() ~ c(
+        "{mean} ± {sd}",
+        "{median} [{p25}; {p75}]",
+        "{min}-{max}"
+      )
+    ),
+    digits = all_continuous() ~ 1,
+    missing = "no",
+    label = list(
+      V1_DEM_AGE ~ "Возраст, лет",
+      V1_ANT_HEIGHTCM ~ "Рост, см",
+      V1_ANT_WEIGHTKG ~ "Масса тела, кг",
+      V1_ANT_BMI ~ "Индекс массы тела, кг/м^2",
+      V1_BIO_NTPROBNP ~ "NT-proBNP, пг/мл",
+      V1_BIO_EGFR ~ "СКФ (eGFR), мл/мин/1,73 м^2",
+      V1_BIO_CREAT ~ "Креатинин, мг/дл",
+      V1_BIO_K ~ "Калий, ммоль/л",
+      V1_KCCQ_OS ~ "KCCQ Overall Score"
+    )
+  ) %>%
+  add_n() %>%
+  add_overall(last = TRUE) %>%
+  bold_labels()
 
-print(desc_by_arm_fmt)
+tbl_by_arm
+
 ```
 
 ### Описательная статистика исходных характеристик (overall)
@@ -407,18 +347,24 @@ print(desc_by_arm_fmt)
 Исходные демографические и клинические характеристики пациентов в группах Crataegus и Placebo хорошо сбалансированы, клинически значимых различий между группами на исходном уровне не выявлено.
 
 ```{r}
-plot_vars <- c(
-  "V1_DEM_AGE",
-  "V1_ANT_BMI",
-  "V1_BIO_EGFR",
-  "V1_KCCQ_OS"
+var_labels <- c(
+  V1_DEM_AGE = "Возраст, лет",
+  V1_ANT_BMI = "Индекс массы тела, кг/м²",
+  V1_BIO_EGFR = "СКФ (eGFR), мл/мин/1,73 м²",
+  V1_KCCQ_OS = "KCCQ Overall Score"
 )
+
+plot_vars <- names(var_labels)
 
 for (v in plot_vars) {
   print(
     ggplot(df, aes(x = .data[[v]])) +
       geom_histogram(bins = 40) +
-      labs(title = v, x = NULL, y = "Count")
+      labs(
+        title = var_labels[[v]],
+        x = var_labels[[v]],
+        y = "Число пациентов"
+      )
   )
 }
 
@@ -436,12 +382,12 @@ ggplot(df %>% filter(V1_BIO_NTPROBNP > 0),
 
 ggplot(df, aes(x = V1_ANT_BMI, fill = ARM)) +
   geom_histogram(position = "identity", alpha = 0.5, bins = 40) +
-  labs(title = "BMI by treatment group")
+  labs(title = "BMI по группе терапии")
 
 ggplot(df %>% filter(V1_BIO_NTPROBNP > 0),
        aes(x = log10(V1_BIO_NTPROBNP), fill = ARM)) +
   geom_histogram(position = "identity", alpha = 0.5, bins = 40) +
-  labs(title = "NT-proBNP (log scale) by treatment group")
+  labs(title = "NT-proBNP (log scale) по группе терапии")
 
 ```
 
@@ -452,126 +398,6 @@ ggplot(df %>% filter(V1_BIO_NTPROBNP > 0),
 -   NT-proBNP в лог-шкале - распределение становится близким к нормальному.
 
 -   BMI - умеренная правосторонняя асимметрия
-
-```{r}
-library(tableone)
-vars_cont <- c(
-  "V1_DEM_AGE",
-  "V1_ANT_HEIGHTCM",
-  "V1_ANT_WEIGHTKG",
-  "V1_ANT_BMI",
-  "V1_BIO_NTPROBNP",
-  "V1_BIO_EGFR",
-  "V1_BIO_CREAT",
-  "V1_BIO_K",
-  "V1_KCCQ_OS"
-)
-
-vars_cat <- c(
-  "V1_DEM_SEX",
-  "V1_VIT_HR_ABN",
-  "V1_VIT_RR_ABN",
-  "V1_VIT_BP_ABN",
-  "V1_VIT_TEMP_ABN",
-  "V1_ECG_RHYTHM_ABN",
-  "V1_ECG_STT_ABN",
-  "V1_ECG_QT_ABN"
-)
-
-vars_all <- c(vars_cont, vars_cat)
-
-tab1 <- CreateTableOne(
-  vars = vars_all,
-  strata = "ARM",
-  data = df,
-  factorVars = vars_cat,
-  addOverall = TRUE
-)
-
-print(
-  tab1,
-  showAllLevels = TRUE,
-  smd = TRUE,
-  quote = FALSE,
-  noSpaces = TRUE
-)
-
-# V6 (12 months)
-
-vars_cont_v6 <- c(
-  "V6_ECHO_LVEF",
-  "V6_ECHO_LVEDV",
-  "V6_BIO_NTPROBNP",
-  "V6_BIO_EGFR",
-  "V6_BIO_CREAT",
-  "V6_BIO_K",
-  "V6_KCCQ_OS"
-)
-
-vars_cat_v6 <- c(
-  "V6_VIT_HR_ABN",
-  "V6_VIT_RR_ABN",
-  "V6_VIT_BP_ABN",
-  "V6_VIT_TEMP_ABN",
-  "V6_ECG_RHYTHM_ABN",
-  "V6_ECG_STT_ABN",
-  "V6_ECG_QT_ABN"
-)
-
-vars_all_v6 <- c(vars_cont_v6, vars_cat_v6)
-vars_cat_v6 <- vars_cat_v6
-
-tab_v6 <- CreateTableOne(
-  vars = vars_all_v6,
-  strata = "ARM",
-  data = df,
-  factorVars = vars_cat_v6,
-  addOverall = TRUE
-)
-
-print(tab_v6, showAllLevels = TRUE, smd = TRUE, quote = FALSE, noSpaces = TRUE)
-
-# V8 (24 months)
-
-vars_cont_v8 <- c(
-  "V8_ECHO_LVEF",
-  "V8_ECHO_LVEDV",
-  "V8_BIO_NTPROBNP",
-  "V8_BIO_EGFR",
-  "V8_BIO_CREAT",
-  "V8_BIO_K",
-  "V8_KCCQ_OS"
-)
-
-vars_cat_v8 <- c(
-  "V8_VIT_HR_ABN",
-  "V8_VIT_RR_ABN",
-  "V8_VIT_BP_ABN",
-  "V8_VIT_TEMP_ABN",
-  "V8_ECG_RHYTHM_ABN",
-  "V8_ECG_STT_ABN",
-  "V8_ECG_QT_ABN"
-)
-
-vars_cat_v8_extra <- c("V8_VIT_SBP_ABN", "V8_VIT_DBP_ABN")
-vars_cat_v8 <- unique(c(vars_cat_v8, vars_cat_v8_extra))
-
-vars_all_v8 <- c(vars_cont_v8, vars_cat_v8)
-vars_cat_v8 <- vars_cat_v8
-
-tab_v8 <- CreateTableOne(
-  vars = vars_all_v8,
-  strata = "ARM",
-  data = df,
-  factorVars = vars_cat_v8,
-  addOverall = TRUE
-)
-
-print(tab_v8, showAllLevels = TRUE, smd = TRUE, quote = FALSE, noSpaces = TRUE)
-
-```
-
-Связи
 
 ```{r}
 ggplot(df %>% filter(V1_BIO_NTPROBNP > 0),
@@ -609,13 +435,182 @@ ggplot(df %>% filter(V1_BIO_NTPROBNP > 0),
        aes(x = V1_BIO_EGFR, y = log10(V1_BIO_NTPROBNP), color = ARM)) +
   geom_point(alpha = 0.4) +
   geom_smooth(method = "loess", se = FALSE) +
-  labs(title = "NT-proBNP vs eGFR by ARM")
+  labs(title = "NT-proBNP vs eGFR по группе терапии")
 
 ```
 
 Разведывательный анализ не выявил выраженных зависимостей между уровнем NT-proBNP и функцией почек, индексом массы тела или показателями качества жизни на исходном уровне. Формы зависимостей сопоставимы между группами лечения, что свидетельствует об отсутствии исходных систематических различий.
 
-Динамика во времени
+### Представление показателей по визитам 0, 6 и 8. Динамика во времени
+
+```{r}
+tbl_v1 <- df %>%
+  mutate(
+    ARM = factor(ARM, levels = c("Placebo", "Crataegus")),
+    sex = factor(V1_DEM_SEX, levels = c("F", "M"), labels = c("Жен", "Муж")),
+    across(ends_with("_ABN"),
+           ~ factor(.x, levels = c(0, 1), labels = c("Норма", "Отклонение")))
+  ) %>%
+  select(
+    ARM,
+    # демография/антропометрия
+    V1_DEM_AGE, sex, V1_ANT_HEIGHTCM, V1_ANT_WEIGHTKG, V1_ANT_BMI,
+    # лаб
+    V1_BIO_NTPROBNP, V1_BIO_EGFR, V1_BIO_CREAT, V1_BIO_K,
+    # качество жизни
+    V1_KCCQ_OS,
+    # ЭКГ и витальные
+    V1_ECG_RHYTHM_ABN, V1_ECG_STT_ABN, V1_ECG_QT_ABN,
+    V1_VIT_BP_ABN, V1_VIT_HR_ABN, V1_VIT_RR_ABN, V1_VIT_TEMP_ABN
+  ) %>%
+  tbl_summary(
+    by = ARM,
+    statistic = list(
+      all_continuous() ~ "{mean} ± {sd}",
+      V1_BIO_NTPROBNP ~ "{median} [{p25}, {p75}]",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits = list(all_continuous() ~ 1, all_categorical() ~ 1),
+    missing = "no",
+    label = list(
+      V1_DEM_AGE ~ "Возраст, лет",
+      sex ~ "Пол",
+      V1_ANT_HEIGHTCM ~ "Рост, см",
+      V1_ANT_WEIGHTKG ~ "Масса тела, кг",
+      V1_ANT_BMI ~ "ИМТ, кг/м²",
+      V1_BIO_NTPROBNP ~ "NT-proBNP, пг/мл",
+      V1_BIO_EGFR ~ "СКФ (eGFR), мл/мин",
+      V1_BIO_CREAT ~ "Креатинин, мг/дл",
+      V1_BIO_K ~ "Калий, ммоль/л",
+      V1_KCCQ_OS ~ "KCCQ Overall Score",
+      V1_ECG_RHYTHM_ABN ~ "ЭКГ: нарушение ритма",
+      V1_ECG_STT_ABN ~ "ЭКГ: изменения ST-T",
+      V1_ECG_QT_ABN ~ "ЭКГ: QT-аномалия",
+      V1_VIT_BP_ABN ~ "АД: отклонение",
+      V1_VIT_HR_ABN ~ "ЧСС: отклонение",
+      V1_VIT_RR_ABN ~ "ЧДД: отклонение",
+      V1_VIT_TEMP_ABN ~ "Температура: отклонение"
+    )
+  ) %>%
+  add_overall(last = TRUE) %>%
+  add_n() %>%
+  bold_labels()
+
+tbl_v1
+
+tbl_v6 <- df %>%
+  mutate(
+    ARM = factor(ARM, levels = c("Placebo", "Crataegus")),
+    across(starts_with("V6_") & ends_with("_ABN"),
+           ~ factor(.x, levels = c(0, 1),
+                    labels = c("Норма", "Отклонение")))
+  ) %>%
+  select(
+    ARM,
+    V6_ECHO_LVEF,
+    V6_ECHO_LVEDV,
+    V6_BIO_NTPROBNP,
+    V6_BIO_EGFR,
+    V6_BIO_CREAT,
+    V6_BIO_K,
+    V6_KCCQ_OS,
+    V6_ECG_RHYTHM_ABN,
+    V6_ECG_STT_ABN,
+    V6_ECG_QT_ABN,
+    V6_VIT_BP_ABN,
+    V6_VIT_HR_ABN,
+    V6_VIT_RR_ABN,
+    V6_VIT_TEMP_ABN
+  ) %>%
+  tbl_summary(
+    by = ARM,
+    statistic = list(
+      all_continuous() ~ "{mean} ± {sd}",
+      V6_BIO_NTPROBNP ~ "{median} [{p25}, {p75}]",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits = list(all_continuous() ~ 1, all_categorical() ~ 1),
+    missing = "no",
+    label = list(
+      V6_ECHO_LVEF ~ "Фракция выброса ЛЖ, %",
+      V6_ECHO_LVEDV ~ "КДО ЛЖ, мл",
+      V6_BIO_NTPROBNP ~ "NT-proBNP, пг/мл",
+      V6_BIO_EGFR ~ "СКФ (eGFR), мл/мин/1,73 м²",
+      V6_BIO_CREAT ~ "Креатинин, мг/дл",
+      V6_BIO_K ~ "Калий, ммоль/л",
+      V6_KCCQ_OS ~ "KCCQ Overall Score",
+      V6_ECG_RHYTHM_ABN ~ "ЭКГ: нарушение ритма",
+      V6_ECG_STT_ABN ~ "ЭКГ: изменения ST–T",
+      V6_ECG_QT_ABN ~ "ЭКГ: QT-аномалия",
+      V6_VIT_BP_ABN ~ "Артериальное давление (откл.)",
+      V6_VIT_HR_ABN ~ "ЧСС (откл.)",
+      V6_VIT_RR_ABN ~ "ЧДД (откл.)",
+      V6_VIT_TEMP_ABN ~ "Температура тела (откл.)"
+    )
+  ) %>%
+  add_overall(last = TRUE) %>%
+  add_n() %>%
+  bold_labels()
+
+tbl_v6
+
+tbl_v8 <- df %>%
+  mutate(
+    ARM = factor(ARM, levels = c("Placebo", "Crataegus")),
+    across(starts_with("V8_") & ends_with("_ABN"),
+           ~ factor(.x, levels = c(0, 1),
+                    labels = c("Норма", "Отклонение")))
+  ) %>%
+  select(
+    ARM,
+    V8_ECHO_LVEF,
+    V8_ECHO_LVEDV,
+    V8_BIO_NTPROBNP,
+    V8_BIO_EGFR,
+    V8_BIO_CREAT,
+    V8_BIO_K,
+    V8_KCCQ_OS,
+    V8_ECG_RHYTHM_ABN,
+    V8_ECG_STT_ABN,
+    V8_ECG_QT_ABN,
+    V8_VIT_HR_ABN,
+    V8_VIT_RR_ABN,
+    V8_VIT_TEMP_ABN,
+    any_of(c("V8_VIT_BP_ABN","V8_VIT_SBP_ABN", "V8_VIT_DBP_ABN"))
+  ) %>%
+  tbl_summary(
+    by = ARM,
+    statistic = list(
+      all_continuous() ~ "{mean} ± {sd}",
+      V8_BIO_NTPROBNP ~ "{median} [{p25}, {p75}]",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits = list(all_continuous() ~ 1, all_categorical() ~ 1),
+    missing = "no",
+    label = list(
+      V8_ECHO_LVEF ~ "Фракция выброса ЛЖ, %",
+      V8_ECHO_LVEDV ~ "КДО ЛЖ, мл",
+      V8_BIO_NTPROBNP ~ "NT-proBNP, пг/мл",
+      V8_BIO_EGFR ~ "СКФ (eGFR), мл/мин/1,73 м²",
+      V8_BIO_CREAT ~ "Креатинин, мг/дл",
+      V8_BIO_K ~ "Калий, ммоль/л",
+      V8_KCCQ_OS ~ "KCCQ Overall Score",
+      V8_ECG_RHYTHM_ABN ~ "ЭКГ: нарушение ритма",
+      V8_ECG_STT_ABN ~ "ЭКГ: изменения ST–T",
+      V8_ECG_QT_ABN ~ "ЭКГ: QT-аномалия",
+      V8_VIT_HR_ABN ~ "ЧСС (откл.)",
+      V8_VIT_RR_ABN ~ "ЧДД (откл.)",
+      V8_VIT_TEMP_ABN ~ "Температура тела (откл.)",
+      V8_VIT_SBP_ABN ~ "САД (откл.)",
+      V8_VIT_DBP_ABN ~ "ДАД (откл.)"
+    )
+  ) %>%
+  add_overall(last = TRUE) %>%
+  add_n() %>%
+  bold_labels()
+
+tbl_v8
+```
 
 ```{r}
 long_dyn <- df %>%
@@ -641,7 +636,7 @@ long_dyn %>%
   ggplot(aes(x = Visit, y = log10(Value))) +
   geom_boxplot() +
   labs(
-    title = "NT-proBNP over time (log scale)",
+    title = "NT-proBNP по визитам (log scale)",
     y = "log10(NT-proBNP)"
   )
 
@@ -649,55 +644,102 @@ long_dyn %>%
   filter(Parameter == "BIO_EGFR") %>%
   ggplot(aes(x = Visit, y = Value)) +
   geom_boxplot() +
-  labs(title = "eGFR over time", y = "eGFR (ml/min)")
+  labs(title = "eGFR по визитам", y = "eGFR (ml/min)")
 
 long_dyn %>%
   filter(Parameter == "KCCQ_OS") %>%
   ggplot(aes(x = Visit, y = Value)) +
   geom_boxplot() +
-  labs(title = "KCCQ Overall Score over time")
+  labs(title = "KCCQ Overall Score по визитам")
 
 long_dyn %>%
   filter(Parameter == "BIO_NTPROBNP", Value > 0) %>%
   ggplot(aes(x = Visit, y = log10(Value), fill = ARM)) +
   geom_boxplot(position = position_dodge(width = 0.8)) +
   labs(
-    title = "NT-proBNP over time by ARM",
+    title = "NT-proBNP по визитам по группам терапии",
     y = "log10(NT-proBNP)"
   )
 ```
 
 Разведывательный анализ динамики NT-proBNP, функции почек и показателей качества жизни показал клинически правдоподобные и сопоставимые между группами изменения во времени без неожиданных паттернов.
 
-Композитные события и время до события
+### Композитные события и время до события
 
 ```{r}
-df %>%
-  count(V0_END_COMP_EVENT)
-df %>%
-  count(ARM, V0_END_COMP_EVENT) %>%
-  group_by(ARM) %>%
-  mutate(prop = n / sum(n))
-summary(df$V0_END_TTE_COMP_M)
+# df %>%
+#   count(V0_END_COMP_EVENT)
+# df %>%
+#   count(ARM, V0_END_COMP_EVENT) %>%
+#   group_by(ARM) %>%
+#   mutate(prop = n / sum(n))
+# summary(df$V0_END_TTE_COMP_M)
+tbl_type_by_arm <- df %>%
+  mutate(
+    ARM = factor(ARM, levels = c("Placebo", "Crataegus")),
+    comp_type = factor(
+      V0_END_COMP_TYPE,
+      levels = c("HF_HOSP", "CV_DEATH", "CENSORED"),
+      labels = c("Госпитализация по ХСН", "СС смерть", "Цензурировано")
+    )
+  ) %>%
+  select(ARM, comp_type) %>%
+  tbl_summary(
+    by = ARM,
+    statistic = all_categorical() ~ "{n} ({p}%)",
+    missing = "no",
+    label = list(comp_type ~ "Тип первого композитного события")
+  ) %>%
+  add_overall(last = TRUE) %>%
+  add_n() %>%
+  bold_labels()
+
+tbl_type_by_arm
+
+tbl_tte_by_arm <- df %>%
+  mutate(ARM = factor(ARM, levels = c("Placebo", "Crataegus"))) %>%
+  select(ARM, V0_END_TTE_COMP_M) %>%
+  tbl_summary(
+    by = ARM,
+    type = V0_END_TTE_COMP_M ~ "continuous2",
+    statistic = V0_END_TTE_COMP_M ~ c(
+      "{median} [{p25}; {p75}]",
+      "{mean} ± {sd}",
+      "{min}–{max}"
+    ),
+    digits = V0_END_TTE_COMP_M ~ 1,
+    missing = "no",
+    label = list(
+      V0_END_TTE_COMP_M ~ "Время до первого композитного события, мес"
+    )
+  ) %>%
+  add_overall(last = TRUE) %>%
+  add_n() %>%
+  bold_labels()
+
+tbl_tte_by_arm
+
+
 ggplot(df, aes(x = V0_END_TTE_COMP_M)) +
   geom_histogram(bins = 30) +
   labs(
-    title = "Time to first composite event",
-    x = "Months",
-    y = "Count"
+    title = "Время до первого композитного события",
+    x = "Месяц",
+    y = "Кол-во событий"
   )
 ggplot(df, aes(x = V0_END_TTE_COMP_M, fill = ARM)) +
   geom_histogram(position = "identity", alpha = 0.5, bins = 30) +
   labs(
-    title = "Time to first composite event by ARM",
-    x = "Months"
+    title = "Время до первого композитного события по группам терапии",
+    x = "Месяц",
+    y = "Кол-во событий"
   )
-df %>%
-  count(V0_END_COMP_TYPE)
-df %>%
-  count(ARM, V0_END_COMP_TYPE) %>%
-  group_by(ARM) %>%
-  mutate(prop = n / sum(n))
+# df %>%
+#   count(V0_END_COMP_TYPE)
+# df %>%
+#   count(ARM, V0_END_COMP_TYPE) %>%
+#   group_by(ARM) %>%
+#   mutate(prop = n / sum(n))
 
 ```
 
