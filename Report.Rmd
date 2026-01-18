@@ -21,34 +21,478 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(flextable)
 library(tidyverse)
+library(readxl)
 ```
 
 ```{r}
 team1 <- read.csv("data/team1_ecrf_wide.csv", sep = ",")
+dict <- read_excel("data/team1_ecrf_data_dictionary.xlsx")
 ```
 
+Объем выборки
 
+```{r}
+df <- team1
+n_total <- nrow(df)
+n_unique_patients <- df %>% distinct(USUBJID) %>% nrow()
 
+cat("Всего строк:", n_total, "\n")
+cat("Уникальных пациентов:", n_unique_patients, "\n")
+```
 
+QC
 
+```{r}
+na_summary <- df %>%
+  summarise(across(everything(), ~ mean(is.na(.)) * 100)) %>%
+  pivot_longer(
+    everything(),
+    names_to = "variable",
+    values_to = "na_percent"
+  ) %>%
+  arrange(desc(na_percent))
 
+print(na_summary)
+```
 
+```{r}
+df %>% count(ARM)
 
+df %>% count(V1_DEM_SEX)
 
+# все бинарные
+binary_vars <- names(df)[str_detect(names(df), "_ABN$|COMP_EVENT$")]
 
+binary_check <- map_dfr(binary_vars, function(v) {
+  df %>%
+    filter(!is.na(.data[[v]])) %>%
+    count(value = .data[[v]]) %>%
+    mutate(variable = v)
+})
 
+print(binary_check)
+```
 
+```{r}
+qc_long <- df %>%
+  pivot_longer(
+    cols = -c(USUBJID, ARM),
+    names_to = "variable",
+    values_to = "value",
+    values_transform = list(value = as.character)
+  )
 
+num_value <- function(x) suppressWarnings(as.numeric(x))
 
+qc_flags <- bind_rows(
 
+  qc_long %>%
+    filter(variable == "V1_DEM_AGE",
+           !is.na(num_value(value)),
+           (num_value(value) < 40 | num_value(value) > 90)) %>%
+    mutate(issue = "AGE out of range (40-90)"),
 
+  qc_long %>%
+    filter(variable == "V1_ANT_HEIGHTCM",
+           !is.na(num_value(value)),
+           (num_value(value) < 145 | num_value(value) > 200)) %>%
+    mutate(issue = "HEIGHT out of range (145-200)"),
 
+  qc_long %>%
+    filter(variable == "V1_ANT_WEIGHTKG",
+           !is.na(num_value(value)),
+           (num_value(value) < 45 | num_value(value) > 160)) %>%
+    mutate(issue = "WEIGHT out of range (45-160)"),
 
+  qc_long %>%
+    filter(variable == "V1_ANT_BMI",
+           !is.na(num_value(value)),
+           (num_value(value) < 15 | num_value(value) > 60)) %>%
+    mutate(issue = "BMI out of range (15-60)"),
 
+  qc_long %>%
+    filter(str_detect(variable, "KCCQ_OS"),
+           !is.na(num_value(value)),
+           (num_value(value) < 0 | num_value(value) > 100)) %>%
+    mutate(issue = "KCCQ out of range (0-100)"),
 
+  qc_long %>%
+    filter(variable == "V1_CBC_HGB",
+           !is.na(num_value(value)),
+           (num_value(value) < 8 | num_value(value) > 18)) %>%
+    mutate(issue = "HGB out of range (8-18)"),
 
+  qc_long %>%
+    filter(variable == "V1_CBC_WBC",
+           !is.na(num_value(value)),
+           (num_value(value) < 2.5 | num_value(value) > 18)) %>%
+    mutate(issue = "WBC out of range (2.5-18)"),
 
+  qc_long %>%
+    filter(variable == "V1_CBC_PLT",
+           !is.na(num_value(value)),
+           (num_value(value) < 80 | num_value(value) > 520)) %>%
+    mutate(issue = "PLT out of range (80-520)"),
 
+  qc_long %>%
+    filter(str_detect(variable, "BIO_NTPROBNP"),
+           !is.na(num_value(value)),
+           num_value(value) <= 0) %>%
+    mutate(issue = "NT-proBNP <= 0"),
 
+  qc_long %>%
+    filter(str_detect(variable, "BIO_CREAT"),
+           !is.na(num_value(value)),
+           (num_value(value) < 0.4 | num_value(value) > 5.0)) %>%
+    mutate(issue = "Creatinine out of plausible range"),
 
+  qc_long %>%
+    filter(str_detect(variable, "BIO_EGFR"),
+           !is.na(num_value(value)),
+           (num_value(value) < 5 | num_value(value) > 140)) %>%
+    mutate(issue = "eGFR out of plausible range"),
 
+  qc_long %>%
+    filter(str_detect(variable, "BIO_K"),
+           !is.na(num_value(value)),
+           (num_value(value) < 2.5 | num_value(value) > 6.8)) %>%
+    mutate(issue = "Potassium out of plausible range"),
+
+  qc_long %>%
+    filter(str_detect(variable, "ECHO_LVEF"),
+           !is.na(num_value(value)),
+           (num_value(value) < 10 | num_value(value) > 75)) %>%
+    mutate(issue = "LVEF out of range"),
+
+  qc_long %>%
+    filter(str_detect(variable, "_ABN$|COMP_EVENT$"),
+           !is.na(num_value(value)),
+           !(num_value(value) %in% c(0, 1))) %>%
+    mutate(issue = "Binary variable not 0/1")
+) %>%
+  select(USUBJID, ARM, variable, value, issue) %>%
+  arrange(variable, USUBJID)
+
+print(qc_flags)
+
+qc_summary <- qc_flags %>% count(variable, issue)
+print(qc_summary)
+```
+
+Критерии включения/невключения
+
+```{r}
+df_crit <- df %>%
+  mutate(
+    inc_age_ge18 = !is.na(V1_DEM_AGE) & V1_DEM_AGE >= 18,
+    exc_egfr_lt30 = !is.na(V1_BIO_EGFR) & V1_BIO_EGFR < 30,
+
+    # NT-proBNP: полный алгоритм невозможен, считаем пороги
+    inc_ntprobnp_ge600 = !is.na(V1_BIO_NTPROBNP) & V1_BIO_NTPROBNP >= 600,
+    inc_ntprobnp_ge400 = !is.na(V1_BIO_NTPROBNP) & V1_BIO_NTPROBNP >= 400,
+    inc_ntprobnp_ge900 = !is.na(V1_BIO_NTPROBNP) & V1_BIO_NTPROBNP >= 900
+  )
+
+criteria_summary <- df_crit %>%
+  summarise(
+    n_total = n(),
+    n_age_ge18 = sum(inc_age_ge18, na.rm = TRUE),
+    n_age_fail_or_missing = sum(!inc_age_ge18, na.rm = TRUE),
+
+    n_ntprobnp_ge600 = sum(inc_ntprobnp_ge600, na.rm = TRUE),
+    n_ntprobnp_ge400 = sum(inc_ntprobnp_ge400, na.rm = TRUE),
+    n_ntprobnp_ge900 = sum(inc_ntprobnp_ge900, na.rm = TRUE),
+
+    n_exc_egfr_lt30 = sum(exc_egfr_lt30, na.rm = TRUE),
+
+    n_bp_abn_flag = if ("V1_VIT_BP_ABN" %in% names(df_crit)) sum(df_crit$V1_VIT_BP_ABN == 1, na.rm = TRUE) else NA_integer_
+  )
+
+violations_strict <- df_crit %>%
+  transmute(
+    USUBJID,
+    ARM,
+    V1_DEM_AGE,
+    V1_BIO_EGFR,
+    V1_BIO_NTPROBNP,
+    fail_age_ge18 = !inc_age_ge18,
+    exc_egfr_lt30 = exc_egfr_lt30
+  ) %>%
+  filter(fail_age_ge18 | exc_egfr_lt30)
+
+ntprobnp_below600 <- df_crit %>%
+  transmute(USUBJID, ARM, V1_BIO_NTPROBNP, inc_ntprobnp_ge600) %>%
+  filter(!inc_ntprobnp_ge600)
+
+print(criteria_summary)
+print(violations_strict)
+print(ntprobnp_below600)
+```
+
+```{r}
+bmi_check <- df %>%
+  filter(
+    !is.na(V1_ANT_HEIGHTCM),
+    !is.na(V1_ANT_WEIGHTKG),
+    !is.na(V1_ANT_BMI)
+  ) %>%
+  mutate(
+    bmi_calc = V1_ANT_WEIGHTKG / (V1_ANT_HEIGHTCM / 100)^2,
+    bmi_diff = V1_ANT_BMI - bmi_calc,
+    bmi_diff_abs = abs(bmi_diff)
+  )
+
+summary(bmi_check$bmi_diff_abs)
+
+bmi_mismatch <- bmi_check %>%
+  filter(bmi_diff_abs > 1) %>%
+  arrange(desc(bmi_diff_abs)) %>%
+  select(
+    USUBJID,
+    ARM,
+    V1_ANT_HEIGHTCM,
+    V1_ANT_WEIGHTKG,
+    V1_ANT_BMI,
+    bmi_calc,
+    bmi_diff
+  )
+
+print(bmi_mismatch)
+
+```
+
+```{r}
+event_check <- df %>%
+  filter(V0_END_COMP_EVENT == 1) %>%
+  filter(is.na(V0_END_TTE_COMP_M) | V0_END_TTE_COMP_M < 0)
+
+print(event_check %>% select(USUBJID, V0_END_COMP_EVENT, V0_END_TTE_COMP_M))
+```
+
+-   Структура датасета и идентификаторы пациентов корректны, дубликаты отсутствуют.
+
+-   Числовые показатели соответствуют допустимым диапазонам eCRF, неадекватных значений не выявлено.
+
+-   Бинарные переменные корректно закодированы (0/1), некорректные уровни отсутствуют.
+
+-   Категориальные переменные (пол, группа лечения) имеют ожидаемые уровни без ошибок.
+
+-   Критичные переменные не содержат значимых пропусков.
+
+-   Пересчет BMI подтвердил корректность значений, расхождения минимальны и связаны с округлением.
+
+```{r}
+bmi_wrong <- df %>%
+  filter(
+    !is.na(V1_ANT_BMI),
+    (V1_ANT_BMI < 15 | V1_ANT_BMI > 60)
+  ) %>%
+  select(
+    USUBJID,
+    ARM,
+    V1_ANT_HEIGHTCM,
+    V1_ANT_WEIGHTKG,
+    V1_ANT_BMI
+  ) %>%
+  arrange(V1_ANT_BMI)
+
+print(bmi_wrong)
+
+```
+
+Описательная статистика
+
+```{r}
+vars_cont <- c(
+  "V1_DEM_AGE",
+  "V1_ANT_HEIGHTCM",
+  "V1_ANT_WEIGHTKG",
+  "V1_ANT_BMI",
+  "V1_BIO_NTPROBNP",
+  "V1_BIO_EGFR",
+  "V1_BIO_CREAT",
+  "V1_BIO_K",
+  "V1_KCCQ_OS"
+)
+
+desc_overall <- df %>%
+  select(any_of(vars_cont)) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  summarise(
+    n = sum(!is.na(value)),
+    mean = mean(value, na.rm = TRUE),
+    sd = sd(value, na.rm = TRUE),
+    median = median(value, na.rm = TRUE),
+    q1 = quantile(value, 0.25, na.rm = TRUE),
+    q3 = quantile(value, 0.75, na.rm = TRUE),
+    min = min(value, na.rm = TRUE),
+    max = max(value, na.rm = TRUE),
+    .by = variable
+  )
+
+print(desc_overall)
+
+desc_overall_fmt <- desc_overall %>%
+  mutate(
+    mean_sd = sprintf("%.1f ± %.1f", mean, sd),
+    median_iqr = sprintf("%.1f [%.1f; %.1f]", median, q1, q3),
+    min_max = sprintf("%.1f–%.1f", min, max)
+  ) %>%
+  select(
+    variable,
+    n,
+    mean_sd,
+    median_iqr,
+    min_max
+  )
+
+print(desc_overall_fmt)
+
+desc_by_arm <- df %>%
+  select(ARM, any_of(vars_cont)) %>%
+  pivot_longer(
+    cols = -ARM,
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  summarise(
+    n = sum(!is.na(value)),
+    mean = mean(value, na.rm = TRUE),
+    sd = sd(value, na.rm = TRUE),
+    median = median(value, na.rm = TRUE),
+    q1 = quantile(value, 0.25, na.rm = TRUE),
+    q3 = quantile(value, 0.75, na.rm = TRUE),
+    .by = c(ARM, variable)
+  )
+
+desc_by_arm_fmt <- desc_by_arm %>%
+  mutate(
+    mean_sd = sprintf("%.1f ± %.1f", mean, sd),
+    median_iqr = sprintf("%.1f [%.1f; %.1f]", median, q1, q3)
+  ) %>%
+  select(
+    variable,
+    ARM,
+    n,
+    mean_sd,
+    median_iqr
+  ) %>%
+  arrange(variable, ARM)
+
+print(desc_by_arm_fmt)
+```
+
+### Описательная статистика исходных характеристик (overall)
+
+В анализ включены 2200 пациентов. Средний возраст составил 66.1 ± 9.9 года, медиана 66 лет, диапазон от 40 до 90 лет. Средний рост пациентов составил 169.7 ± 8.9 см, масса тела - 81.4 ± 15.6 кг. Средний индекс массы тела был 28.5 ± 6.3 кг/м², медиана 28.1 кг/м², при диапазоне значений от 13.0 до 65.6 кг/м², что соответствует преимущественно избыточной массе тела.
+
+Исходный уровень NT-proBNP характеризовался выраженной вариабельностью и асимметрией распределения: среднее значение составило 1722.4 ± 1582.1 пг/мл, медиана - 1251.0 пг/мл. Показатели функции почек были умеренно снижены: средняя СКФ 68.1 ± 17.4 мл/мин, медиана 68 мл/мин. Средний уровень креатинина составил 1.0 ± 0.3 мг/дл, калия - 4.2 ± 0.4 ммоль/л.
+
+Качество жизни по шкале KCCQ характеризовалось умеренным снижением: среднее значение общего балла составило 54.7 ± 17.9, медиана - 55 баллов при полном диапазоне значений от 0 до 100.
+
+### Описательная статистика по группам лечения
+
+В каждую группу лечения было включено по 1100 пациентов. Исходные демографические и клинические характеристики в группах Crataegus и Placebo были сопоставимы.
+
+Средний возраст в группе Crataegus составил 65.9 ± 10.1 года, в группе Placebo 66.4 ± 9.7 года. Антропометрические показатели практически не различались между группами: средний BMI составил 28.5 ± 6.2 кг/м² в группе Crataegus и 28.6 ± 6.4 кг/м² в группе Placebo.
+
+Показатели функции почек были сходными: средняя СКФ 68.3 ± 17.3 мл/мин в группе Crataegus и 67.9 ± 17.5 мл/мин в группе Placebo, уровни креатинина и калия также не демонстрировали клинически значимых различий.
+
+Исходные уровни NT-proBNP были высокими и сопоставимыми между группами: среднее значение 1740.4 ± 1629.3 пг/мл в группе Crataegus и 1704.3 ± 1534.1 пг/мл в группе Placebo, медианные значения также близки. Показатели качества жизни по KCCQ были практически идентичны в обеих группах, со средними значениями около 55 баллов.
+
+Исходные демографические и клинические характеристики пациентов в группах Crataegus и Placebo хорошо сбалансированы, клинически значимых различий между группами на исходном уровне не выявлено.
+
+```{r}
+plot_vars <- c(
+  "V1_DEM_AGE",
+  "V1_ANT_BMI",
+  "V1_BIO_EGFR",
+  "V1_KCCQ_OS"
+)
+
+for (v in plot_vars) {
+  print(
+    ggplot(df, aes(x = .data[[v]])) +
+      geom_histogram(bins = 40) +
+      labs(title = v, x = NULL, y = "Count")
+  )
+}
+
+ggplot(df, aes(x = V1_BIO_NTPROBNP)) +
+  geom_histogram(bins = 50) +
+  labs(title = "NT-proBNP", x = NULL)
+
+ggplot(df %>% filter(V1_BIO_NTPROBNP > 0),
+       aes(x = log10(V1_BIO_NTPROBNP))) +
+  geom_histogram(bins = 40) +
+  labs(
+    title = "NT-proBNP (log10 scale)",
+    x = "log10(NT-proBNP)"
+  )
+
+ggplot(df, aes(x = V1_ANT_BMI, fill = ARM)) +
+  geom_histogram(position = "identity", alpha = 0.5, bins = 40) +
+  labs(title = "BMI by treatment group")
+
+ggplot(df %>% filter(V1_BIO_NTPROBNP > 0),
+       aes(x = log10(V1_BIO_NTPROBNP), fill = ARM)) +
+  geom_histogram(position = "identity", alpha = 0.5, bins = 40) +
+  labs(title = "NT-proBNP (log scale) by treatment group")
+
+```
+
+-   Возраст, eGFR, KCCQ - распределения близки к симметричным, без выраженных выбросов.
+
+-   NT-proBNP в линейной шкале - выраженная правосторонняя асимметрия, что типично для популяции ХСН.
+
+-   NT-proBNP в лог-шкале - распределение становится близким к нормальному.
+
+-   BMI - умеренная правосторонняя асимметрия
+
+```{r}
+library(tableone)
+vars_cont <- c(
+  "V1_DEM_AGE",
+  "V1_ANT_HEIGHTCM",
+  "V1_ANT_WEIGHTKG",
+  "V1_ANT_BMI",
+  "V1_BIO_NTPROBNP",
+  "V1_BIO_EGFR",
+  "V1_BIO_CREAT",
+  "V1_BIO_K",
+  "V1_KCCQ_OS"
+)
+
+vars_cat <- c(
+  "V1_DEM_SEX",
+  "V1_VIT_HR_ABN",
+  "V1_VIT_RR_ABN",
+  "V1_VIT_BP_ABN",
+  "V1_VIT_TEMP_ABN",
+  "V1_ECG_RHYTHM_ABN",
+  "V1_ECG_STT_ABN",
+  "V1_ECG_QT_ABN"
+)
+
+vars_all <- c(vars_cont, vars_cat)
+
+tab1 <- CreateTableOne(
+  vars = vars_all,
+  strata = "ARM",
+  data = df,
+  factorVars = vars_cat,
+  addOverall = TRUE
+)
+
+print(
+  tab1,
+  showAllLevels = TRUE,
+  smd = TRUE,
+  quote = FALSE,
+  noSpaces = TRUE
+)
+```
