@@ -19,7 +19,7 @@ output:
 
 ```{r setup, include=FALSE}
 
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE )
 
 library(flextable)
 library(readr)
@@ -711,6 +711,7 @@ ggplot(dat_bnp, aes(x = lBNP0)) +
   ) +
   theme_minimal()
 ```
+
 В связи с выраженной асимметрией распределения NT-proBNP анализ проводился с использованием логарифмического преобразования; результаты представлены в виде геометрических средних и отношений геометрических средних с 95% доверительными интервалами
 
 ```{r}
@@ -740,8 +741,38 @@ res24 <- broom::tidy(fit24, conf.int = TRUE) %>%
     pval  = p.value
   )
 
-res12
-res24
+bnp_results <- bind_rows(res12, res24) %>%
+  mutate(
+    ratio_ci = sprintf("%.2f (%.2f; %.2f)", ratio, lcl, ucl),
+    pct_change = sprintf("%+.1f%%", (ratio - 1) * 100),
+    
+    # Форматируем p-value
+    pval_fmt = case_when(
+      pval < 0.001 ~ "<0.001",
+      pval < 0.05  ~ sprintf("%.3f", pval),
+      TRUE         ~ sprintf("%.3f", pval)
+    )
+  ) %>%
+  select(
+    "Визит" = VISIT,
+    "Отношение средних (95% ДИ)" = ratio_ci,
+    "Изменение, %" = pct_change,
+    "p-значение" = pval_fmt
+  )
+
+bnp_table <- bnp_results %>%
+  flextable() %>%
+  theme_booktabs() %>%
+  autofit() %>%
+  align(j = 2:4, align = "center", part = "all") %>%
+  set_table_properties(layout = "autofit", width = 1) %>%
+  set_caption("Анализ динамики уровня NT-proBNP (ANCOVA на логарифмированных данных)") %>%
+  add_footer_lines(c(
+    "Представлено отношение геометрических средних группы Боярышник к группе Плацебо.",
+    "Значение < 1.00 означает более низкий уровень NT-proBNP в основной группе."
+  ))
+
+bnp_table
 ```
 
 Исходные уровни NT-proBNP были сопоставимы между группами лечения. Анализ вторичной конечной точки был выполнен с использованием анализа ковариации (ANCOVA) после логарифмического преобразования значений NT-proBNP с поправкой на исходный уровень показателя. Результаты представлены в виде отношения геометрических средних между группами лечения с соответствующими 95% доверительными интервалами. 
@@ -926,6 +957,6 @@ ggplot(bnp_sum, aes(x = VISIT, y = mean, group = arm, colour = arm)) +
   ) +
   theme_minimal(base_size = 12)
 ```
-Рисунок X. Динамика уровня NT-proBNP 
+ 
 
 
