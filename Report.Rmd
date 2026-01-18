@@ -88,15 +88,11 @@ event_types <- c("HF_HOSP", "CV_DEATH")
 # Мапим по списку событий
 plots_list <- map(event_types, function(current_event) {
   
-  # ШАГ 1: Создаем временный датасет внутри функции.
   # Мы создаем колонку 'is_event', которая будет TRUE (1) для текущего типа события.
   temp_data <- data_surv %>%
     mutate(is_event = (type == current_event))
-  
-  # ШАГ 2: Теперь survfit четко видит колонку 'is_event' внутри 'temp_data'
   fit <- survfit(Surv(Time, is_event) ~ group, data = temp_data)
   
-  # ШАГ 3: Рисуем
   ggsurvplot(fit, 
              data = temp_data,
              conf.int = TRUE,
@@ -111,7 +107,6 @@ plots_list <- map(event_types, function(current_event) {
              palette = "Dark2")
 })
 
-# Вывод
 plots_list[[1]] # График для HF_HOSP
 plots_list[[2]] # График для CV_DEATH
 ```
