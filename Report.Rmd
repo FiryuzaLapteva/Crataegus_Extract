@@ -160,7 +160,7 @@ tbl_baseline <-
     ),
     statistic = list(
       all_continuous() ~ "{mean} ± {sd}",
-      c(V1_BIO_NTPROBNP, V1_KCCQ_OS) ~ "{median} [{p25}, {p75}]", # ЭКГ и витальные показатели
+      c(V1_BIO_NTPROBNP, V1_KCCQ_OS) ~ "{median} [{p25}, {p75}]", # оставим описание тут как медиана)
       all_categorical() ~ "{n} ({p})"
     ),
     digits = list(
@@ -221,79 +221,607 @@ summary(
 
 
 
+
+
+
+
+
+
+
+#АНАЛИЗ ВТОРИЧНЫХ КОНЕЧНЫХ ТОЧЕК
+
+
+Подготовка данных (KCCQ). ANCOVA
+
+
+*подготовка данных*
 ```{r}
-
-dat_primary <- team1 %>%
-  transmute(
-    usubjid = USUBJID,
-    arm = factor(ARM, levels = c("Placebo", "Crataegus")),
-    time_m = V0_END_TTE_COMP_M,
-    event  = as.integer(V0_END_COMP_EVENT == 1)
-  ) %>%
-  filter(!is.na(time_m), !is.na(event), !is.na(arm))
-
-# Log-rank (как в DAPA-HF рядом с KM)
-lr <- survdiff(Surv(time_m, event) ~ arm, data = dat_primary)
-
-# Cox (основной эффект: HR)
-fit_cox <- coxph(Surv(time_m, event) ~ arm, data = dat_primary)
-summary(fit_cox)
+team1 <- team1 %>%
+  mutate(
+    death_event = (V0_END_COMP_TYPE == "CV_DEATH") & (V0_END_COMP_EVENT == 1),
+    death_before_12m = death_event & V0_END_TTE_COMP_M < 12,
+    death_before_24m = death_event & V0_END_TTE_COMP_M < 24
+  )
+table(team1$V0_END_COMP_TYPE, useNA = "ifany")
+table(team1$death_before_12m, useNA = "ifany")
+table(team1$death_before_24m, useNA = "ifany")
 ```
-```{r km_primary_event, fig.width=7.5, fig.height=6.5, dpi=300}
-
-library(survival)
-library(survminer)
 
 
-fit_arm <- survfit(
-  Surv(V0_END_TTE_COMP_M, V0_END_COMP_EVENT) ~ ARM,
-  data = team1
-)
 
-nejm_theme <- theme_classic(base_size = 12) +
-  theme(
-    legend.position = "top",
-    legend.title = element_blank(),
-    axis.title = element_text(size = 12),
-    axis.text  = element_text(size = 11)
+ANCOVA 
+
+```{r}
+fit12 <- lm(KCCQ_12 ~ ARM + KCCQ_BL, data = dat_kccq)
+
+res12 <- broom::tidy(fit12, conf.int = TRUE) %>%
+  filter(term == "ARMCrataegus") %>%
+  transmute(
+    VISIT = "12 мес",
+    diff = estimate,
+    lcl = conf.low,
+    ucl = conf.high,
+    pval = p.value
   )
 
-p <- ggsurvplot(
-  fit_arm,
-  data = team1,
 
-  fun = "event",          # ← ВАЖНО: 1 − S(t)
-  conf.int = FALSE,
+fit24 <- lm(KCCQ_24 ~ ARM + KCCQ_BL, data = dat_kccq)
 
-  pval = TRUE,
-  risk.table = TRUE,
-  risk.table.height = 0.22,
-  risk.table.y.text = FALSE,
-
-  break.time.by = 6,
-  xlim = c(0, 24),
-  xlab = "Месяцы",
-  ylab = "Накопленная частота",
-
-  legend.labs = c("Плацебо", "Crataegus"),
-
-  censor = TRUE,
-  censor.shape = 124,
-
-  ggtheme = nejm_theme,
-  tables.theme = theme_classic(base_size = 11)
-)
-
-p
+res24 <- broom::tidy(fit24, conf.int = TRUE) %>%
+  filter(term == "ARMCrataegus") %>%
+  transmute(
+    VISIT = "24 мес",
+    diff = estimate,
+    lcl = conf.low,
+    ucl = conf.high,
+    pval = p.value
+  )
+res12
+res24
 ```
 
 
+Подготовка данных для представления в таблице
+
+```{r}
+library(gt)
+
+
+# helpers 
+msd <- function(m, s, d = 1) sprintf(paste0("%.", d, "f±%.", d, "f"), m, s)
+ci95 <- function(est, lcl, ucl, d = 1) sprintf(paste0("%.", d, "f (%.", d, "f до %.", d, "f)"), est, lcl, ucl)
+fmt_p <- function(p) ifelse(is.na(p), "", ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)))
+
+#  data 
+dat <- team1 %>%
+  transmute(
+    USUBJID,
+    arm = factor(ARM, levels = c("Placebo", "Crataegus")),
+    KCCQ0  = V1_KCCQ_OS,
+    KCCQ12 = ifelse(death_before_12m, NA, V6_KCCQ_OS),
+    KCCQ24 = ifelse(death_before_24m, NA, V8_KCCQ_OS)
+  )
+
+# ANCOVA effects (12 and 24 отдельно) 
+eff_ancova <- function(y, section_label) {
+  fit <- lm(reformulate(c("arm", "KCCQ0"), response = y), data = dat)
+  broom::tidy(fit, conf.int = TRUE) %>%
+    filter(term == "armCrataegus") %>%
+    transmute(
+      section = section_label,
+      diff_ci = ci95(estimate, conf.low, conf.high, 1),
+      p = p.value
+    )
+}
+
+e12 <- eff_ancova("KCCQ12", "Через 12 месяцев")
+e24 <- eff_ancova("KCCQ24", "Через 24 месяца")
+
+#  section rows builder (baseline within same visit N) 
+make_section_rows <- function(section_label, yvar, eff_row) {
+
+  pdat <- dat %>% filter(arm == "Placebo")
+  cdat <- dat %>% filter(arm == "Crataegus")
+
+  yp <- pdat[[yvar]]
+  yc <- cdat[[yvar]]
+
+  ip <- !is.na(yp)   # есть оценка на визите
+  ic <- !is.na(yc)
+
+  # baseline и delta считаем в той же выборке
+  blp <- pdat$KCCQ0[ip]
+  blc <- cdat$KCCQ0[ic]
+
+  dp <- yp[ip] - blp
+  dc <- yc[ic] - blc
+
+  tibble(
+    Секция = section_label,
+    `Конечная точка` = c(
+      "Число пациентов с оценкой KCCQ",
+      "Исходное значение — баллы",
+      "Значение на визите — баллы",
+      "Улучшение — баллы"
+    ),
+    `Плацебо` = c(
+      sum(ip),
+      msd(mean(blp, na.rm = TRUE), sd(blp, na.rm = TRUE), 1),
+      msd(mean(yp[ip], na.rm = TRUE), sd(yp[ip], na.rm = TRUE), 1),
+      msd(mean(dp, na.rm = TRUE), sd(dp, na.rm = TRUE), 1)
+    ),
+    `Боярышник` = c(
+      sum(ic),
+      msd(mean(blc, na.rm = TRUE), sd(blc, na.rm = TRUE), 1),
+      msd(mean(yc[ic], na.rm = TRUE), sd(yc[ic], na.rm = TRUE), 1),
+      msd(mean(dc, na.rm = TRUE), sd(dc, na.rm = TRUE), 1)
+    ),
+    `Средняя межгрупповая разница (95% ДИ)` = c("", "", "", eff_row$diff_ci),
+    `p-значение` = c("", "", "", fmt_p(eff_row$p))
+  )
+}
+
+#  baseline block (all with baseline) 
+base_p <- dat$KCCQ0[dat$arm == "Placebo"]
+base_c <- dat$KCCQ0[dat$arm == "Crataegus"]
+
+base_rows <- tibble(
+  Секция = "Исходно",
+  `Конечная точка` = c("Число пациентов с оценкой KCCQ", "Значение — баллы"),
+  `Плацебо` = c(
+    sum(!is.na(base_p)),
+    msd(mean(base_p, na.rm = TRUE), sd(base_p, na.rm = TRUE), 1)
+  ),
+  `Боярышник` = c(
+    sum(!is.na(base_c)),
+    msd(mean(base_c, na.rm = TRUE), sd(base_c, na.rm = TRUE), 1)
+  ),
+  `Средняя межгрупповая разница (95% ДИ)` = c("", ""),
+  `p-значение` = c("", "")
+)
+
+# combine all 
+tbl_df <- bind_rows(
+  base_rows,
+  make_section_rows("Через 12 месяцев", "KCCQ12", e12),
+  make_section_rows("Через 24 месяца", "KCCQ24", e24)
+)
+
+#  render 
+tbl_kccq <- tbl_df %>%
+  gt(groupname_col = "Секция") %>%
+  tab_header(
+    title = "",
+    subtitle = "Данные представлены как среднее±СО. Межгрупповая разница на 12 и 24 мес оценена ANCOVA с поправкой на исходный KCCQ."
+  ) %>%
+  cols_label(
+    `Конечная точка` = "Конечная точка",
+    `Плацебо` = "Плацебо",
+    `Боярышник` = "Боярышник",
+    `Средняя межгрупповая разница (95% ДИ)` = "Средняя межгрупповая разница (95% ДИ)",
+    `p-значение` = "p-значение"
+  ) %>%
+  cols_align("left", columns = c(`Конечная точка`)) %>%
+  cols_align("center", columns = c(`Плацебо`, `Боярышник`, `Средняя межгрупповая разница (95% ДИ)`, `p-значение`)) %>%
+  fmt_missing(everything(), missing_text = "") %>%
+  tab_options(
+    table.font.size = px(12),
+    row_group.font.weight = "bold",
+    data_row.padding = px(4)
+  )
+
+tbl_kccq
+```
+Таблица Х. Динамика качества жизни по шкале KCCQ
+
+Исходные значения суммарного балла Kansas City Cardiomyopathy Questionnaire (KCCQ) были сопоставимы между группами лечения. Для анализов через 12 и 24 месяца использовались данные пациентов с доступной оценкой KCCQ на соответствующем визите. Статистически значимых различий между группами лечения выявлено не было. Через 12 месяцев наблюдения скорректированная межгрупповая разница суммарного балла KCCQ (боярышник минус плацебо) составила 0,3 балла (95% ДИ от −1,0 до 1,5; p = 0,678). Через 24 месяца наблюдения соответствующая скорректированная межгрупповая разница составила 0,9 балла (95% ДИ от −0,6 до 2,4; p = 0,234). 
+Дополнительно динамика качества жизни по KCCQ в зависимости от группы лечения в различных сроках наблюдения отражены на рисунке Х.
+
+*подготовка данных для рисунка*
+
+```{r}
+kccq_sum <- team1 %>%
+  transmute(
+    arm = factor(ARM, levels = c("Placebo", "Crataegus")),
+    BL  = V1_KCCQ_OS,
+    M12 = ifelse(death_before_12m, NA, V6_KCCQ_OS),
+    M24 = ifelse(death_before_24m, NA, V8_KCCQ_OS)
+  ) %>%
+  pivot_longer(cols = c(BL, M12, M24), names_to = "VISIT", values_to = "KCCQ") %>%
+  mutate(
+    VISIT = factor(VISIT, levels = c("BL", "M12", "M24"),
+                   labels = c("Исходно", "12 месяцев", "24 месяца"))
+  ) %>%
+  group_by(arm, VISIT) %>%
+  summarise(
+    n = sum(!is.na(KCCQ)),
+    mean = mean(KCCQ, na.rm = TRUE),
+    se = sd(KCCQ, na.rm = TRUE) / sqrt(n),
+    lcl = mean - qt(0.975, df = n - 1) * se,
+    ucl = mean + qt(0.975, df = n - 1) * se,
+    .groups = "drop"
+  )
+```
+
+*Рисунок*
+```{r}
+
+pd <- position_dodge(width = 0.25)
+
+ggplot(kccq_sum,
+       aes(x = VISIT, y = mean,
+           group = arm, colour = arm)) +
+  geom_line(position = pd, linewidth = 0.9) +
+  geom_point(position = pd, size = 2.2) +
+  geom_errorbar(
+    aes(ymin = lcl, ymax = ucl),
+    position = pd,
+    width = 0.12,
+    linewidth = 0.7
+  ) +
+  scale_y_continuous(
+    limits = c(40, 80),
+    breaks = seq(40, 80, 5)
+  ) +
+  labs(
+    y = "KCCQ, среднее значение (95% ДИ), баллы",
+    x = NULL,
+    colour = "Группа лечения"
+  ) +
+  theme_minimal(base_size = 12)
+```
+Рисунок X. Динамика качества жизни по шкале KCCQ в группах лечения
 
 
 
+```{r}
+library(gt)
+
+# dat_kccq: USUBJID, ARM, KCCQ_BL, KCCQ_12, KCCQ_24
+
+# 1) long с респондерами и фактом наличия оценки на визите
+resp_long <- dat_kccq %>%
+  mutate(
+    resp12 = !is.na(KCCQ_12) & (KCCQ_12 - KCCQ_BL >= 5),
+    resp24 = !is.na(KCCQ_24) & (KCCQ_24 - KCCQ_BL >= 5),
+    has12  = !is.na(KCCQ_12),
+    has24  = !is.na(KCCQ_24)
+  ) %>%
+  select(USUBJID, ARM, resp12, resp24, has12, has24) %>%
+  pivot_longer(
+    cols = c(resp12, resp24, has12, has24),
+    names_to = c(".value", "tp"),
+    names_pattern = "(resp|has)(12|24)"
+  ) %>%
+  mutate(
+    VISIT = ifelse(tp == "12", "12 месяцев", "24 месяца"),
+    ARM = factor(ARM, levels = c("Placebo", "Crataegus")),
+    Группа = recode(as.character(ARM),
+                    "Placebo" = "Плацебо",
+                    "Crataegus" = "Боярышник")
+  )
+
+# 2) n на визите и респондеры среди оценённых
+sum_by_visit <- resp_long %>%
+  group_by(VISIT, Группа) %>%
+  summarise(
+    n = sum(has, na.rm = TRUE),
+    responders = sum(resp[has], na.rm = TRUE),
+    pct = 100 * responders / n,
+    resp_fmt = sprintf("%d (%.1f%%)", responders, pct),
+    n_fmt = as.character(n),
+    .groups = "drop"
+  )
+
+# 3) p-value (χ² с поправкой Йейтса) отдельно для 12 и 24 мес
+pvals <- resp_long %>%
+  filter(has) %>%                 # только пациенты с оценкой на визите
+  group_by(VISIT) %>%
+  summarise(
+    p_value = {
+      tab <- table(ARM, resp)     # 2×2
+      suppressWarnings(chisq.test(tab, correct = TRUE)$p.value)  # Йейтс
+    },
+    .groups = "drop"
+  ) %>%
+  mutate(p_value = ifelse(p_value < 0.001, "<0.001", sprintf("%.3f", p_value)))
+
+# 4) формируем таблицу "как в журнале": строки = показатели, колонки = группы
+tab_n <- sum_by_visit %>%
+  select(VISIT, Группа, value = n_fmt) %>%
+  mutate(Показатель = "Число пациентов с оценкой KCCQ") %>%
+  pivot_wider(names_from = Группа, values_from = value)
+
+tab_resp <- sum_by_visit %>%
+  select(VISIT, Группа, value = resp_fmt) %>%
+  mutate(Показатель = "Клинически значимое улучшение (ΔKCCQ ≥ 5), n (%)") %>%
+  pivot_wider(names_from = Группа, values_from = value)
+
+final_tbl <- bind_rows(tab_n, tab_resp) %>%
+  left_join(pvals, by = "VISIT") %>%
+  mutate(`p-значение` = ifelse(Показатель == "Клинически значимое улучшение (ΔKCCQ ≥ 5), n (%)", p_value, "")) %>%
+  select(
+    VISIT,
+    Показатель,
+    Плацебо,
+    Боярышник,
+    `p-значение`
+  ) %>%
+  mutate(VISIT = factor(VISIT, levels = c("12 месяцев", "24 месяца")))
+
+# 5) gt-оформление
+tbl_resp <- final_tbl %>%
+  gt(groupname_col = "VISIT") %>%
+  tab_header(
+    title = "Клинически значимое улучшение качества жизни по KCCQ",
+    subtitle = "Улучшение определено как ΔKCCQ ≥ 5 баллов от исходного уровня. В анализ включены пациенты с оценкой на соответствующем визите."
+  ) %>%
+  cols_label(
+    Показатель = "",
+    Плацебо = "Плацебо",
+    Боярышник = "Боярышник",
+    `p-значение` = "p-значение"
+  ) %>%
+  cols_align("left", columns = c(Показатель)) %>%
+  cols_align("center", columns = c(Плацебо, Боярышник, `p-значение`)) %>%
+  fmt_missing(everything(), missing_text = "") %>%
+  tab_options(
+    table.font.size = px(12),
+    row_group.font.weight = "bold",
+    data_row.padding = px(4)
+  )
+
+tbl_resp
+
+```
+Таблица X. Клинически значимое улучшение качества жизни по шкале KCCQ
+
+Как уже отмечалось, клинически значимое улучшение определено как увеличение суммарного балла KCCQ ≥ 5 пунктов по сравнению с исходным уровнем. В анализ включены пациенты с доступной оценкой KCCQ на соответствующем визите. Через 12 месяцев клинически значимое улучшение качества жизни (ΔKCCQ ≥ 5 баллов) было отмечено у 431 пациента (46,3%) в группе плацебо и у 448 пациентов (48,2%) в группе боярышника; статистически значимых различий между группами не выявлено (χ² с поправкой Йейтса, p = 0,431).
+Через 24 месяца клинически значимое улучшение наблюдалось у 352 пациентов (41,7%) в группе плацебо и у 383 пациентов (45,2%) в группе боярышника; межгрупповые различия также не достигли статистической значимости (χ² с поправкой Йейтса, p = 0,159).
 
 
 
+```{r}
+# 1) Подготовка данных NT-proBNP
+dat_bnp <- team1 %>%
+  transmute(
+    USUBJID,
+    arm = factor(ARM, levels = c("Placebo", "Crataegus")),
+    BNP0  = V1_BIO_NTPROBNP,
+    BNP12 = ifelse(death_before_12m, NA, V6_BIO_NTPROBNP),
+    BNP24 = ifelse(death_before_24m, NA, V8_BIO_NTPROBNP)
+  ) %>%
+  mutate(
+    lBNP0  = log(BNP0),
+    lBNP12 = log(BNP12),
+    lBNP24 = log(BNP24)
+  )
+
+ggplot(dat_bnp, aes(x = BNP0)) +
+  geom_histogram(bins = 50, fill = "steelblue", color = "white") +
+  scale_x_continuous(labels = scales::comma) +
+  labs(
+    x = "NT-proBNP, pg/mL",
+    y = "Частота",
+    title = "Распределение NT-proBNP"
+  ) +
+  theme_minimal()
+```
+В связи с выраженной асимметрией распределения NT-proBNP анализ проводился с использованием логарифмического преобразования; результаты представлены в виде геометрических средних и отношений геометрических средних с 95% доверительными интервалами
+
+```{r}
+# log-ANCOVA для NT-proBNP
+
+fit12 <- lm(lBNP12 ~ arm + lBNP0, data = dat_bnp)
+
+res12 <- broom::tidy(fit12, conf.int = TRUE) %>%
+  filter(term == "armCrataegus") %>%
+  transmute(
+    VISIT = "12 мес",
+    ratio = exp(estimate),
+    lcl   = exp(conf.low),
+    ucl   = exp(conf.high),
+    pval  = p.value
+  )
+
+fit24 <- lm(lBNP24 ~ arm + lBNP0, data = dat_bnp)
+
+res24 <- broom::tidy(fit24, conf.int = TRUE) %>%
+  filter(term == "armCrataegus") %>%
+  transmute(
+    VISIT = "24 мес",
+    ratio = exp(estimate),
+    lcl   = exp(conf.low),
+    ucl   = exp(conf.high),
+    pval  = p.value
+  )
+
+res12
+res24
+```
 
 
+```{r}
+#  helpers 
+msd  <- function(m, s, d = 1) sprintf(paste0("%.", d, "f±%.", d, "f"), m, s)
+ci95_ratio <- function(est, lcl, ucl, d = 2) sprintf(paste0("%.", d, "f (%.", d, "f до %.", d, "f)"), est, lcl, ucl)
+fmt_p <- function(p) ifelse(is.na(p), "", ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)))
+
+# Геометрическое среднее = exp(mean(log(x)))
+gmean <- function(x) exp(mean(log(x), na.rm = TRUE))
+# Геометрическое SD (мультипликативное) = exp(sd(log(x)))
+gsd   <- function(x) exp(sd(log(x), na.rm = TRUE))
+gmsd  <- function(x, d = 2) sprintf(paste0("%.", d, "f×/÷%.", d, "f"), gmean(x), gsd(x)) # для справки
+
+#  data (log-ready) 
+dat_bnp <- team1 %>%
+  transmute(
+    USUBJID,
+    arm = factor(ARM, levels = c("Placebo", "Crataegus")),
+    BNP0  = V1_BIO_NTPROBNP,
+    BNP12 = ifelse(death_before_12m, NA, V6_BIO_NTPROBNP),
+    BNP24 = ifelse(death_before_24m, NA, V8_BIO_NTPROBNP)
+  ) %>%
+  mutate(
+    BNP0  = ifelse(BNP0  <= 0, NA, BNP0),
+    BNP12 = ifelse(BNP12 <= 0, NA, BNP12),
+    BNP24 = ifelse(BNP24 <= 0, NA, BNP24),
+    lBNP0  = log(BNP0),
+    lBNP12 = log(BNP12),
+    lBNP24 = log(BNP24)
+  )
+
+# log-ANCOVA effects: ratio (Crataegus/Placebo) 
+log_ancova_eff <- function(ylog, section_label) {
+  fit <- lm(reformulate(c("arm", "lBNP0"), response = ylog), data = dat_bnp)
+  tidy(fit, conf.int = TRUE) %>%
+    filter(term == "armCrataegus") %>%
+    transmute(
+      section = section_label,
+      ratio = exp(estimate),
+      lcl   = exp(conf.low),
+      ucl   = exp(conf.high),
+      ratio_ci = ci95_ratio(exp(estimate), exp(conf.low), exp(conf.high), 2),
+      p = p.value
+    )
+}
+
+e12 <- log_ancova_eff("lBNP12", "Через 12 месяцев")
+e24 <- log_ancova_eff("lBNP24", "Через 24 месяца")
+
+# section rows (геометрические средние; изменение как % от baseline) 
+make_rows_log <- function(section, bnp_var, eff) {
+
+  p <- dat_bnp %>% filter(arm == "Placebo")
+  c <- dat_bnp %>% filter(arm == "Crataegus")
+
+  yp <- p[[bnp_var]]; yc <- c[[bnp_var]]
+  ip <- !is.na(yp);    ic <- !is.na(yc)
+
+  blp <- p$BNP0[ip];   blc <- c$BNP0[ic]
+  yp  <- yp[ip];       yc  <- yc[ic]
+
+  # геометрические средние
+  g_bl_p <- gmean(blp); g_bl_c <- gmean(blc)
+  g_v_p  <- gmean(yp);  g_v_c  <- gmean(yc)
+
+  # изменение как % (геометрическая "кратность"): (GM_visit/GM_base - 1)*100
+  chg_p <- (g_v_p / g_bl_p - 1) * 100
+  chg_c <- (g_v_c / g_bl_c - 1) * 100
+
+  tibble(
+    Секция = section,
+    `Конечная точка` = c(
+      "Число пациентов с оценкой NT-proBNP",
+      "Исходное значение — геом. среднее, pg/mL",
+      "Значение на визите — геом. среднее, pg/mL",
+      "Изменение от исходного — %, геом. среднее*"
+    ),
+    `Плацебо` = c(
+      sum(ip),
+      sprintf("%.0f", g_bl_p),
+      sprintf("%.0f", g_v_p),
+      sprintf("%+.1f", chg_p)
+    ),
+    `Боярышник` = c(
+      sum(ic),
+      sprintf("%.0f", g_bl_c),
+      sprintf("%.0f", g_v_c),
+      sprintf("%+.1f", chg_c)
+    ),
+    `Отношение геом. средних (ANCOVA), 95% ДИ` = c("", "", "", eff$ratio_ci),
+    `p-значение` = c("", "", "", fmt_p(eff$p))
+  )
+}
+
+#  baseline block (all with baseline) 
+base_p <- dat_bnp$BNP0[dat_bnp$arm == "Placebo" & !is.na(dat_bnp$BNP0)]
+base_c <- dat_bnp$BNP0[dat_bnp$arm == "Crataegus" & !is.na(dat_bnp$BNP0)]
+
+base_rows <- tibble(
+  Секция = "Исходно",
+  `Конечная точка` = c("Число пациентов с оценкой NT-proBNP", "Значение — геом. среднее, pg/mL"),
+  `Плацебо` = c(length(base_p), sprintf("%.0f", gmean(base_p))),
+  `Боярышник` = c(length(base_c), sprintf("%.0f", gmean(base_c))),
+  `Отношение геом. средних (ANCOVA), 95% ДИ` = c("", ""),
+  `p-значение` = c("", "")
+)
+
+#  final table 
+tbl_df <- bind_rows(
+  base_rows,
+  make_rows_log("Через 12 месяцев", "BNP12", e12),
+  make_rows_log("Через 24 месяца", "BNP24", e24)
+)
+
+tbl_bnp_log <- tbl_df %>%
+  gt(groupname_col = "Секция") %>%
+  tab_header(
+    title = "NT-proBNP: динамика (log-ANCOVA)",
+    subtitle = "NT-proBNP проанализирован после лог-преобразования; представлены геометрические средние. Межгрупповый эффект — отношение геом. средних (Crataegus/Placebo), 95% ДИ."
+  ) %>%
+  cols_align("left", `Конечная точка`) %>%
+  cols_align("center", -c(Секция, `Конечная точка`)) %>%
+  fmt_missing(everything(), missing_text = "") %>%
+  tab_options(
+    table.font.size = px(12),
+    row_group.font.weight = "bold",
+    data_row.padding = px(4)
+  ) %>%
+  tab_source_note(
+    source_note = "*Изменение от исходного рассчитано как (геом. среднее на визите / геом. среднее исходно − 1)×100%."
+  )
+
+tbl_bnp_log
+```
+Таблица Х. Динамика уровня NT-proBNP
+
+Исходные уровни NT-proBNP были сопоставимы между группами лечения. Анализ вторичной конечной точки был выполнен с использованием анализа ковариации (ANCOVA) после логарифмического преобразования значений NT-proBNP с поправкой на исходный уровень показателя. Результаты представлены в виде отношения геометрических средних между группами лечения с соответствующими 95% доверительными интервалами. (*ЭТО НАДО ПЕРЕМЕСТИТЬ В РАЗДЕЛ СТАТ АНАЛИЗА*)
+Статистически значимых различий между группами лечения выявлено не было. Через 12 месяцев наблюдения отношение геометрических средних NT-proBNP (боярышник/плацебо) составило 0,99 (95% ДИ 0,94–1,05; p = 0,824). Через 24 месяца наблюдения соответствующее отношение геометрических средних составило 1,00 (95% ДИ 0,94–1,08; p = 0,914).Дополнительно динамика уровни NT-proBNP в зависимости от группы лечения в различных сроках наблюдения отражены на рисунке Х.
+
+
+
+```{r}
+# 1) Сводка для графика: геометрическое среднее и 95% ДИ
+bnp_sum <- dat_bnp %>%
+  pivot_longer(cols = c(lBNP0, lBNP12, lBNP24),
+               names_to = "VISIT", values_to = "lBNP") %>%
+  mutate(
+    VISIT = factor(VISIT,
+      levels = c("lBNP0", "lBNP12", "lBNP24"),
+      labels = c("Исходно", "12 месяцев", "24 месяца")
+    )
+  ) %>%
+  group_by(arm, VISIT) %>%
+  summarise(
+    n = sum(!is.na(lBNP)),
+    m = mean(lBNP, na.rm = TRUE),
+    se = sd(lBNP, na.rm = TRUE) / sqrt(n),
+    mean = exp(m),
+    lcl  = exp(m - qt(0.975, df = n - 1) * se),
+    ucl  = exp(m + qt(0.975, df = n - 1) * se),
+    .groups = "drop"
+  )
+
+# 2) График
+pd <- position_dodge(width = 0.25)
+
+ggplot(bnp_sum, aes(x = VISIT, y = mean, group = arm, colour = arm)) +
+  geom_line(position = pd, linewidth = 0.9) +
+  geom_point(position = pd, size = 2.2) +
+  geom_errorbar(aes(ymin = lcl, ymax = ucl),
+                position = pd, width = 0.12, linewidth = 0.7) +
+  scale_y_continuous(
+    limits = c(200, 2000),
+    breaks = seq(200, 2000, 200)
+  ) +
+  labs(
+    y = "NT-proBNP, геометрическое среднее (95% ДИ), pg/mL",
+    x = NULL,
+    colour = "Группа лечения"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+Рисунок X. Динамика уровня NT-proBNP 
 
