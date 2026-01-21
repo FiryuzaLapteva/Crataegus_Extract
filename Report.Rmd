@@ -335,6 +335,7 @@ plot_death_cif <- cif_model %>%
 
 plot_death_cif
 ```
+
 ```{r}
 ggsave(
   filename = "cif_hosp_high_res.png", # Имя файла
