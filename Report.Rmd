@@ -203,7 +203,7 @@ ggcoxzph(test_ph)
 
 # Анализ ВКТ
 
-При оценке вторичной конечной точки анализ выживаемости не выявил статистически значимых различий между группой экстракта боярышника и группой плацебо. Кривые выживаемости (Каплана-Мейера) демонстрируют высокую степень конгруэнтности на протяжении всего 24-месячного периода наблюдения. Выраженная суперпозиция доверительных интервалов подтверждает отсутствие превосходства исследуемой терапии над контрольной группой.
+При оценке вторичной конечной точки анализ выживаемости не выявил статистически значимых различий между группой экстракта боярышника и группой плацебо. Время до "Смерти ИЛИ Госпитализации" (Primary Composite Endpoint). Здесь используется обычный Каплан-Мейер.
 
 ```{r fig.height=8, fig.width=10}
 surv_object <- Surv(time = data_surv$Time, event = data_surv$Event_OS)
@@ -223,36 +223,137 @@ p2 <- ggsurvplot(fit_2,
                  xlim = c(0, 24))
 p2
 ```
-Значение p=1(крайне редкое для реальных данных) указывает на абсолютную идентичность кривых накопления событий госпитализации в обеих группах. Это означает, что вероятность попасть в больницу с декомпенсацией СН была абсолютно одинаковой как для пациентов, принимавших Crataegus, так и для группы контроля. 
 
-В отношении наиболее «жесткой» точки — смертности — наблюдается минимальное, статистически незначимое расхождение кривых. 
-```{r  fig.height=8, fig.width=10}
-event_types <- c("HF_HOSP", "CV_DEATH")
+Анализ отдельных компонентов с использованием моделей конкурирующих рисков подтвердил результаты первичного анализа. Высокая частота событий в исследуемой популяции (более половины пациентов были госпитализированы и почти четверть скончались от СС-причин в течение 2 лет) подчеркивает тяжесть отобранной когорты, однако добавление боярышника к оптимальной базовой терапии не оказало влияния ни на риск госпитализаций, ни на показатели смертности.
 
-# Мапим по списку событий
-plots_list <- map(event_types, function(current_event) {
-  
-  # Мы создаем колонку 'is_event', которая будет TRUE (1) для текущего типа события.
-  temp_data <- data_surv %>%
-    mutate(is_event = (type == current_event))
-  fit <- survfit(Surv(Time, is_event) ~ group, data = temp_data)
-  
-  ggsurvplot(fit, 
-             data = temp_data,
-             conf.int = TRUE,
-             risk.table = TRUE,
-             pval = TRUE,
-             legend.labs = c("Crataegus", "Placebo"), 
-             legend.title = "Group",
-             title = paste("Outcome:", current_event), # Используем current_event
-             xlab = "Months",
-             xlim = c(0, 24),
-             break.time.by = 6,
-             palette = "Dark2")
-})
+# Для смерти и госпитализации по отдельности графики CIF
 
-plots_list[[1]] # График для HF_HOSP
-plots_list[[2]] # График для CV_DEATH
+```{r fig.height=8, fig.width=10}
+
+library(tidycmprsk)
+library(ggsurvfit)
+
+
+# 1. Подготовка данных: статус должен быть фактором
+# 0 = Цензурирован, 1 = Госпитализация, 2 = Смерть
+data_cif <- data_surv %>%
+  mutate(status_factor = case_when(
+    type == "CENSORED" ~ 0,
+    type == "HF_HOSP"  ~ 1,
+    type == "CV_DEATH" ~ 2
+  ) %>% factor(levels = 0:2, labels = c("censor", "hosp", "death")))
+
+# 2. Расчет модели Кумулятивной Инцидентности
+# Мы оцениваем риск госпитализации, учитывая смерть как конкурирующее событие
+cif_model <- cuminc(Surv(Time, status_factor) ~ group, data = data_cif)
+
+# 3. Построение графика по стандартам публикации
+plot_cif <- cif_model %>%
+  ggcuminc(outcome = "hosp") + 
+  add_risktable(
+    risktable_stats = c("n.risk", "cum.event")
+  )  +             
+  add_pvalue(
+    caption = "Gray's test {p.value}",
+    location = "annotation", # Позволяет разместить внутри графика
+    x = 22,                   # Координата по оси X (начало графика)
+    label = "Gray's test p={p.value}", # Формат текста
+    size = 4                 # Размер шрифта (опционально)
+  ) +             
+  add_confidence_interval() +   
+  scale_ggsurvfit(
+    x_scales = list(
+      breaks = seq(0, 24, by = 6), # Шаг 6 месяцев
+      limits = c(0, 24)            # Обрезать строго на 24
+    ),
+    y_scales = list(
+      labels = scales::percent_format() # Сделать ось Y в процентах (опционально)
+    )
+  ) +
+  labs(
+    title = "Cumulative Incidence of HF Hospitalization",
+    subtitle = "Accounting for CV death as a competing risk",
+    x = "Months",
+    y = "Cumulative Incidence"
+  ) +
+  scale_color_brewer(palette = "Set1") +
+  theme_minimal() +
+  theme(
+    legend.position = c(0.02, 0.95),      # Координаты X (0.02) и Y (0.95)
+    legend.justification = c(0, 1),      # Точка привязки (левый верхний угол легенды)
+    legend.background = element_rect(fill = "white", color = "grey80"), # Белый фон и рамка, чтобы сетка не мешала
+    legend.box.margin = margin(6, 6, 6, 6),
+    
+    plot.title = element_text(face = "bold"),
+    plot.caption = element_blank()
+  )
+
+plot_cif
+```
+
+
+```{r fig.height=8, fig.width=10}
+plot_death_cif <- cif_model %>%
+  ggcuminc(outcome = "death") + # Указываем "death" (уровень 2 в факторе)
+  add_risktable(
+    risktable_stats = c("n.risk", "cum.event")
+  ) +             
+  add_pvalue(
+    caption = "Gray's test {p.value}",
+    location = "annotation", # Позволяет разместить внутри графика
+    x = 22,                   # Координата по оси X (начало графика)
+    label = "Gray's test p={p.value}", # Формат текста
+    size = 4                 # Размер шрифта (опционально)
+  ) + 
+  add_confidence_interval() +   
+  scale_ggsurvfit(
+    x_scales = list(
+      breaks = seq(0, 24, by = 6), # Шаг 6 месяцев
+      limits = c(0, 24)            # Обрезать строго на 24
+    ),
+    y_scales = list(
+      labels = scales::percent_format() # Сделать ось Y в процентах (опционально)
+    )
+  ) +
+  labs(
+    title = "Cumulative Incidence of Cardiovascular Death",
+    subtitle = "Accounting for HF hospitalization as a competing risk",
+    x = "Months",
+    y = "Cumulative Incidence (Probability of Death)"
+  ) +
+  scale_color_brewer(palette = "Set1") +
+  theme_minimal() +
+  theme(
+    legend.position = c(0.02, 0.95),      # Координаты X (0.02) и Y (0.95)
+    legend.justification = c(0, 1),      # Точка привязки (левый верхний угол легенды)
+    legend.background = element_rect(fill = "white", color = "grey80"), # Белый фон и рамка, чтобы сетка не мешала
+    legend.box.margin = margin(6, 6, 6, 6),
+    
+    plot.title = element_text(face = "bold"),
+    plot.caption = element_blank()
+  )
+
+plot_death_cif
+```
+```{r}
+ggsave(
+  filename = "cif_hosp_high_res.png", # Имя файла
+  plot = plot_cif,                  # Объект графика
+  width = 10,                       # Ширина в дюймах
+  height = 7,                       # Высота в дюймах
+  dpi = 300,                        # Разрешение (300 для презы - идеально)
+  bg = "white"                      # Белый фон (важно для PPT, чтобы не был прозрачным)
+)
+
+# Сохранение второго графика (Смерть) - замените plot_death на ваш объект
+ggsave(
+  filename = "cif_death_high_res.png",
+  plot = plot_death_cif,
+  width = 10,
+  height = 7,
+  dpi = 300,
+  bg = "white"
+)
 ```
 
 Анализ изменение качества жизни по шкале KCCQ проводился с помощью ANCOVA. 
